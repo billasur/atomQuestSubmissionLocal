@@ -28,13 +28,15 @@ export const STATES = {
 const LOW_THRESHOLD = 0.35;
 const HIGH_THRESHOLD = 1.8;
 
-const SETTLE_MUL = 0.02;
-const SETTLE_FLOW = 0.005;
+// Seconds for the 3D flow to settle. Only the water particles ease: the
+// numbers a visitor reads are the picked state's numbers immediately.
+const EASE = 0.8;
 
 export function createSim() {
   let state = "new";
 
-  // Smoothed state so the transition reads as water settling, not a jump cut.
+  // Smoothed copies, used for the particle speed only, so the transition reads
+  // as water settling rather than a jump cut.
   const mul = [...STATES.new.multipliers];
   let flowFactor = 1;
 
@@ -57,19 +59,11 @@ export function createSim() {
     clock += dt;
     const target = STATES[state];
 
-    const k = 1 - Math.exp(-dt / 0.18);
-    let drift = 0;
-    let flowDrift = 0;
+    const k = 1 - Math.exp(-dt / EASE);
     for (let i = 0; i < mul.length; i++) {
       mul[i] += (target.multipliers[i] - mul[i]) * k;
-      drift = Math.max(drift, Math.abs(target.multipliers[i] - mul[i]));
     }
     flowFactor += (target.flowFactor - flowFactor) * k;
-    flowDrift = Math.abs(target.flowFactor - flowFactor);
-
-    // The water path is still changing: no reading is published, so the
-    // verdict can never quote numbers that belong to the previous state.
-    const settled = drift < SETTLE_MUL && flowDrift < SETTLE_FLOW;
 
     // Random walk on each sensor, then relaxed back toward zero.
     for (let i = 0; i < noise.p.length; i++) {
@@ -81,11 +75,18 @@ export function createSim() {
     noise.tdsIn += (Math.random() * 2 - 1) * 0.05;
     noise.tdsIn *= 0.97;
 
-    const resistances = STAGES.map((s, i) => s.base * mul[i]);
+    // The reading belongs to the state that was picked, not to the visual
+    // transition: a verdict can never be blank or quote the previous state.
+    const resistances = STAGES.map((s, i) => s.base * target.multipliers[i]);
     const total = resistances.reduce((a, b) => a + b, 0);
 
-    const flow = FLOW_REF * Math.pow(BASE_TOTAL / total, 0.22) * flowFactor;
+    const flow = FLOW_REF * Math.pow(BASE_TOTAL / total, 0.22) * target.flowFactor;
     const flowReading = flow * (1 + noise.flow);
+
+    // The eased resistances and flow factor drive the water particles only.
+    const easedTotal = STAGES.reduce((sum, s, i) => sum + s.base * mul[i], 0);
+    const visualFlow =
+      FLOW_REF * Math.pow(BASE_TOTAL / easedTotal, 0.22) * flowFactor;
 
     const pressures = [];
     let p = FEED_KPA * (1 + noise.p[0] * 0.0014);
@@ -112,18 +113,12 @@ export function createSim() {
     const tdsIn = 412 + Math.sin(clock * 0.11) * 4 + noise.tdsIn * 8;
     const tdsOut = Math.max(8, tdsIn * 0.092 + noise.tdsIn * 2.2);
 
-    const verdict = settled
-      ? buildVerdict(state, stageReadings, pressures, flowReading)
-      : {
-          level: "settling",
-          title: "Reading the water path",
-          detail: "Waiting for the flow to settle — no reading yet.",
-          stageId: null,
-        };
+    const verdict = buildVerdict(state, stageReadings, pressures, flowReading);
 
     cached = {
       state,
       flow: flowReading,
+      visualFlow,
       pressures,
       stages: stageReadings,
       tdsIn,

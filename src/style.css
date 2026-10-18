@@ -1290,6 +1290,47 @@ h1 {
   }
 }
 
+@media (max-width: 720px) {
+  /* Below the site header the unit comes first, with the state buttons under it
+     and the verdict under those, so the reading is in the thumb's reach; the
+     title and standfirst follow below the stage. */
+  .stage-frame {
+    order: 1;
+    margin-top: 0;
+  }
+
+  .controls {
+    order: 2;
+    margin-top: 14px;
+  }
+
+  .verdict {
+    order: 3;
+  }
+
+  .kicker {
+    order: 4;
+    margin-top: 30px;
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    order: 5;
+  }
+
+  .standfirst {
+    order: 6;
+  }
+
+  .disclaimer {
+    order: 7;
+  }
+
+  .stage {
+    height: max(420px, 62svh);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

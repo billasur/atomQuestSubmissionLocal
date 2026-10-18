@@ -455,6 +455,8 @@ export function buildModel() {
     group,
     anchors,
     occluders,
+    // The display panel is the one part of the unit a callout must never sit on.
+    controller: controller.group,
     update,
     setFault,
     setDisplay,
@@ -798,7 +800,7 @@ function makeController(materials) {
   const canvas = document.createElement("canvas");
   canvas.width = 384;
   canvas.height = 192;
-  let lastLines = ["SIMULATED MODEL", "ALL OK", "0.45 L/MIN   412 > 38 PPM"];
+  let lastLines = ["ALL OK", "0.45 L/MIN", "412 > 38 PPM"];
   const ctx = canvas.getContext("2d");
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -839,29 +841,38 @@ function makeController(materials) {
     group.add(gland);
   }
 
-  // Screen text is flat ink on an off-black panel: no glow. The status line is
-  // the one a person standing at the unit reads, so it gets the space.
+  // Screen text is flat ink on an off-black panel: no glow. The panel is only
+  // ~80 px wide on a desktop stage however many texels it is drawn with, so the
+  // flow and TDS readings get a line each and a type size that survives the
+  // mapping: below ~44 px in texture space they land under 9 px on screen.
+  function fitText(text, maxWidth, largest, smallest, weight) {
+    let size = largest;
+    while (size > smallest) {
+      ctx.font = `${weight} ${size}px ${FONT}`;
+      if (ctx.measureText(text).width <= maxWidth) break;
+      size -= 2;
+    }
+    ctx.font = `${weight} ${size}px ${FONT}`;
+  }
+
   function draw(lines) {
     ctx.fillStyle = "#0a0c0d";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = "#8e908a";
     ctx.textBaseline = "top";
-    ctx.font = `500 19px ${FONT}`;
-    ctx.fillText(lines[0], 18, 12);
+    const maxWidth = canvas.width - 36;
 
     ctx.fillStyle = "#f0efe9";
-    const maxWidth = canvas.width - 36;
-    let size = 52;
-    do {
-      ctx.font = `650 ${size}px ${FONT}`;
-      size -= 2;
-    } while (ctx.measureText(lines[1]).width > maxWidth && size > 24);
-    ctx.fillText(lines[1], 18, 36);
+    fitText(lines[0], maxWidth, 54, 30, 650);
+    ctx.fillText(lines[0], 18, 12);
+
+    ctx.fillStyle = "#d7d8d1";
+    fitText(lines[1], maxWidth, 46, 34, 500);
+    ctx.fillText(lines[1], 18, 74);
 
     ctx.fillStyle = "#b6b7af";
-    ctx.font = `450 25px ${FONT}`;
-    ctx.fillText(lines[2], 18, 126);
+    fitText(lines[2], maxWidth, 46, 30, 450);
+    ctx.fillText(lines[2], 18, 128);
 
     texture.needsUpdate = true;
   }

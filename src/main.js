@@ -214,13 +214,8 @@ const PRESETS = {
   },
   detail: {
     direction: new THREE.Vector3(1, 0.12, 0.28),
-    fill: { x: 0.88, y: 0.94 },
+    fill: { x: 0.74, y: 0.88 },
     zoom: 1,
-    // The cartridge stack, not the whole cabinet, is the subject here.
-    box: new THREE.Box3(
-      new THREE.Vector3(-0.13, 0.04, -0.11),
-      new THREE.Vector3(0.15, 0.33, 0.08)
-    ),
   },
 };
 
@@ -305,6 +300,7 @@ function fitView(direction, aspect, fill, box, zoom) {
 }
 
 let modelBox = null;
+let controllerBox = null;
 
 function presetView(preset, aspect) {
   const portrait = aspect < 0.9;
@@ -420,6 +416,9 @@ try {
   model.group.position.y = 0.012;
   scene.add(model.group);
   modelBox = new THREE.Box3().setFromObject(model.group);
+  controllerBox = model.controller
+    ? new THREE.Box3().setFromObject(model.controller)
+    : null;
 
   controls = new OrbitControls(camera, canvas);
   controls.target.set(0, 0.21, 0);
@@ -527,7 +526,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const reading = sim.tick(dt);
 
-  if (model) model.update(dt, reading.flow);
+  if (model) model.update(dt, reading.visualFlow ?? reading.flow);
 
   traceAccum += dt;
   if (traceAccum >= TRACE_INTERVAL) {
@@ -619,13 +618,7 @@ function syncReadouts(reading) {
   if (model) model.setDisplay(displayLines(reading));
   if (model) {
     model.setStatus(
-      reading.verdict.level === "settling"
-        ? "ok"
-        : reading.verdict.level !== "fault"
-          ? "ok"
-          : mode === "clogged"
-            ? "warn"
-            : "fault"
+      reading.verdict.level !== "fault" ? "ok" : mode === "clogged" ? "warn" : "fault"
     );
   }
 }
@@ -661,25 +654,23 @@ function syncVerdict(reading) {
 }
 
 /* The controller's own panel: the one line a person standing at the unit would
-   read, in the words a filter monitor actually uses. */
+   read, in the words a filter monitor actually uses. Three lines, because on a
+   screen this small a single flow-and-TDS line shrinks below readable type. */
 function displayLines(reading) {
   const verdict = reading.verdict;
   const stage = reading.stages.find((s) => s.id === verdict.stageId);
   let status = "ALL OK";
 
-  if (verdict.level === "settling") status = "SETTLING";
-  else if (verdict.level === "fault" && stage) {
+  if (verdict.level === "fault" && stage) {
     if (reading.state === "removed") status = `CART ${stage.index} MISSING`;
     else if (reading.state === "bypassed") status = `CART ${stage.index} BYPASSED`;
     else status = `CART ${stage.index} CLOGGED`;
   }
 
   return [
-    "SIMULATED MODEL",
     status,
-    `${reading.flow.toFixed(2)} L/MIN   ${Math.round(
-      reading.tdsIn
-    )} > ${Math.round(reading.tdsOut)} PPM`,
+    `${reading.flow.toFixed(2)} L/MIN`,
+    `${Math.round(reading.tdsIn)} > ${Math.round(reading.tdsOut)} PPM`,
   ];
 }
 
@@ -707,6 +698,11 @@ const LAYOUT = {
   stackGap: 8,
   rowFootGap: 12,
   rowSilhouetteGap: 10,
+  clearance: 6,
+  controllerPad: 8,
+  nudgeStep: 4,
+  nudgeLimit: 320,
+  footInset: 64,
 };
 
 function showLabel(label) {
@@ -728,17 +724,25 @@ function labelSize(label) {
   return label.size;
 }
 
-/* The model's screen-space silhouette: callouts are placed outside it, so a
-   reading never covers a cartridge. */
-function projectSilhouette(rect) {
-  const out = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-  if (!modelBox) return out;
+/* A world-space box projected into the stage. The model's silhouette keeps the
+   callouts off the cartridges; the controller gets its own box because it sits
+   on the back wall, where the row of pressure readings would otherwise land on
+   its display. */
+const silhouetteScreen = { left: 0, right: 0, top: 0, bottom: 0 };
+const controllerScreen = { left: 0, right: 0, top: 0, bottom: 0 };
+
+function projectBoxRect(box, rect, out) {
+  out.left = Infinity;
+  out.right = -Infinity;
+  out.top = Infinity;
+  out.bottom = -Infinity;
+  if (!box) return out;
 
   for (let i = 0; i < 8; i++) {
     boxCorner.set(
-      i & 1 ? modelBox.max.x : modelBox.min.x,
-      i & 2 ? modelBox.max.y : modelBox.min.y,
-      i & 4 ? modelBox.max.z : modelBox.min.z
+      i & 1 ? box.max.x : box.min.x,
+      i & 2 ? box.max.y : box.min.y,
+      i & 4 ? box.max.z : box.min.z
     );
     ndc.copy(boxCorner).project(camera);
     const x = (ndc.x * 0.5 + 0.5) * rect.width;
@@ -747,6 +751,21 @@ function projectSilhouette(rect) {
     out.right = Math.max(out.right, x);
     out.top = Math.min(out.top, y);
     out.bottom = Math.max(out.bottom, y);
+  }
+  return out;
+}
+
+function projectSilhouette(rect) {
+  return projectBoxRect(modelBox, rect, silhouetteScreen);
+}
+
+function projectController(rect) {
+  const out = projectBoxRect(controllerBox, rect, controllerScreen);
+  if (Number.isFinite(out.left)) {
+    out.left -= LAYOUT.controllerPad;
+    out.right += LAYOUT.controllerPad;
+    out.top -= LAYOUT.controllerPad;
+    out.bottom += LAYOUT.controllerPad;
   }
   return out;
 }
@@ -790,7 +809,7 @@ function projectLabels() {
     anchors.push({ label, x, y });
   }
 
-  layoutLabels(anchors, rect, projectSilhouette(rect));
+  layoutLabels(anchors, rect, projectSilhouette(rect), projectController(rect));
 }
 
 /* Place a body, then point the leader at the nearest edge of it. The dot never
@@ -850,16 +869,17 @@ function placeRow(items, rect, silhouette) {
   // stage padding.
   const limit = Number.isFinite(silhouette.top)
     ? silhouette.top - LAYOUT.rowSilhouetteGap
-    : rect.height;
+    : rect.height - LAYOUT.footInset;
   let top = Math.max(LAYOUT.margin, limit - total);
   let bottom = top;
+  const placed = [];
 
   for (const row of lines) {
     const height = Math.max(...row.items.map((entry) => entry.size.h));
     let left = (rect.width - row.width) / 2;
 
     for (const { item, size } of row.items) {
-      placeBody(item.label, left, top, size);
+      placed.push({ label: item.label, left, top, size });
       left += size.w + gap;
     }
 
@@ -868,17 +888,18 @@ function placeRow(items, rect, silhouette) {
     top += lineGap;
   }
 
-  return bottom;
+  return { placed, bottom };
 }
 
 /* The probes sit at the bottom corners, so their callouts sit in the margin
    beside the unit — one column each side, de-overlapped top to bottom. */
 function placeSides(items, rect, silhouette, minTop) {
+  const placed = [];
   if (!Number.isFinite(silhouette.left) || !Number.isFinite(silhouette.right)) {
-    return;
+    return placed;
   }
 
-  const maxBottom = rect.height - 64;
+  const maxBottom = rect.height - LAYOUT.footInset;
 
   for (const side of ["left", "right"]) {
     const column = items
@@ -903,25 +924,124 @@ function placeSides(items, rect, silhouette, minTop) {
       top = Math.min(top, maxBottom - size.h);
       top = Math.max(top, minTop);
 
-      placeBody(item.label, clampedLeft, top, size);
+      placed.push({ label: item.label, left: clampedLeft, top, size });
       cursor = top + size.h + LAYOUT.stackGap;
     }
   }
+
+  return placed;
 }
 
-function layoutLabels(anchors, rect, silhouette) {
-  // The row is measured first: it sets how far down the side columns may start.
-  const rowBottom = placeRow(
-    anchors.filter((item) => item.label.row),
-    rect,
-    silhouette
+function rectsOverlap(a, b, clearance) {
+  if (!Number.isFinite(b.left) || !Number.isFinite(b.top)) return false;
+  return (
+    a.left < b.right + clearance &&
+    a.right > b.left - clearance &&
+    a.top < b.bottom + clearance &&
+    a.bottom > b.top - clearance
   );
-  placeSides(
+}
+
+/* Nothing about the projected boxes is stable enough to place against: the
+   same preset puts the row on the controller at one stage size and clear of it
+   at another, and a longer reading widens a body the fit never allowed for. So
+   the layout is resolved rather than computed — walk each body outwards in
+   small steps until it clears the controller and every body already reserved,
+   and fall back to where it was placed if the stage is too tight. The row only
+   slides sideways (it is a row) and the side columns only slide up and down. */
+function nudgeSteps(entry, rect) {
+  if (!entry.label.row) {
+    return [
+      [0, -1],
+      [0, 1],
+      [-1, 0],
+      [1, 0],
+    ];
+  }
+  // Away from the middle, so the readings keep their order along the rail.
+  return entry.left + entry.size.w / 2 < rect.width / 2
+    ? [
+        [-1, 0],
+        [1, 0],
+      ]
+    : [
+        [1, 0],
+        [-1, 0],
+      ];
+}
+
+function resolveLayout(placed, rect, obstacles) {
+  const reserved = obstacles.filter(
+    (box) => Number.isFinite(box.left) && Number.isFinite(box.top)
+  );
+
+  for (const entry of placed) {
+    const { size } = entry;
+    const maxLeft = Math.max(LAYOUT.margin, rect.width - LAYOUT.margin - size.w);
+    const maxTop = Math.max(LAYOUT.margin, rect.height - LAYOUT.footInset - size.h);
+    const left = Math.max(LAYOUT.margin, Math.min(entry.left, maxLeft));
+    const top = Math.max(LAYOUT.margin, Math.min(entry.top, maxTop));
+
+    const box = { left, right: left + size.w, top, bottom: top + size.h };
+    let best = reserved.some((other) => rectsOverlap(box, other, LAYOUT.clearance))
+      ? null
+      : box;
+    const steps = nudgeSteps(entry, rect);
+
+    for (
+      let d = LAYOUT.nudgeStep;
+      !best && d <= LAYOUT.nudgeLimit;
+      d += LAYOUT.nudgeStep
+    ) {
+      for (const [dx, dy] of steps) {
+        const x = Math.max(LAYOUT.margin, Math.min(left + dx * d, maxLeft));
+        const y = Math.max(LAYOUT.margin, Math.min(top + dy * d, maxTop));
+        const candidate = { left: x, right: x + size.w, top: y, bottom: y + size.h };
+        if (reserved.some((other) => rectsOverlap(candidate, other, LAYOUT.clearance))) {
+          continue;
+        }
+        best = candidate;
+        break;
+      }
+    }
+
+    const chosen = best || box;
+    entry.left = chosen.left;
+    entry.top = chosen.top;
+    reserved.push(chosen);
+  }
+
+  return placed;
+}
+
+function layoutLabels(anchors, rect, silhouette, controller) {
+  // The row is measured first: it sets how far down the side columns may start.
+  const row = placeRow(anchors.filter((item) => item.label.row), rect, silhouette);
+  const sides = placeSides(
     anchors.filter((item) => item.label.side),
     rect,
     silhouette,
-    rowBottom + LAYOUT.rowFootGap
+    row.bottom + LAYOUT.rowFootGap
   );
+
+  // The row is anchored above the unit, so the unit itself is not an obstacle
+  // to it — the controller, which is the one thing in that band, is. The side
+  // columns sit beside the unit and stay clear of its silhouette as well.
+  const rowPlaced = resolveLayout(row.placed, rect, [controller]);
+  const sidePlaced = resolveLayout(sides, rect, [
+    silhouette,
+    controller,
+    ...rowPlaced.map((entry) => ({
+      left: entry.left,
+      right: entry.left + entry.size.w,
+      top: entry.top,
+      bottom: entry.top + entry.size.h,
+    })),
+  ]);
+
+  for (const entry of [...rowPlaced, ...sidePlaced]) {
+    placeBody(entry.label, entry.left, entry.top, entry.size);
+  }
 }
 
 /* -------------------------------------------------------------------- size */
