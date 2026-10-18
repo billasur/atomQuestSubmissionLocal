@@ -24,7 +24,7 @@ const RAIL_Y = 0.335;
 const RAIL_Z = 0.012;
 // Controller centre: its glands land on the same line as the rail, so the
 // harness climbs the back wall and enters the enclosure from below.
-const CONTROLLER_Y = 0.373;
+const CONTROLLER_Y = 0.374;
 
 export function buildModel() {
   const group = new THREE.Group();
@@ -58,9 +58,11 @@ export function buildModel() {
   // The front and right-hand sides are left open: this is the cut-away, so
   // the cartridges and their simulated state are always in view.
 
-  // Mounting board on the back wall, so the cartridges read against a plane.
-  const board = roundedBox(W - 0.04, H - 0.1, 0.006, 0.002, materials.board);
-  board.position.set(0, H / 2 - 0.005, -D / 2 + T + 0.004);
+  // Mounting board on the back wall, so the cartridges read against a plane. It
+  // stops below the sensor rail: the controller is bolted to the wall above it,
+  // so its plate reads as hardware instead of sinking into the board.
+  const board = roundedBox(W - 0.04, H - 0.14, 0.006, 0.002, materials.board);
+  board.position.set(0, H / 2 - 0.025, -D / 2 + T + 0.004);
   add(shell, board, true);
 
   // Feet.
@@ -265,6 +267,11 @@ export function buildModel() {
     ],
   ];
 
+  // tubePaths 5 and 6 are cartridge 3's inlet and outlet legs; when the
+  // membrane is valved out the bypass loop takes the flow, so their particles
+  // stop. Captured here so the fault switch can find them.
+  const tubeFlows = [];
+
   for (const points of tubePaths) {
     const curve = new THREE.CatmullRomCurve3(
       points.map((p) => new THREE.Vector3(...p)),
@@ -273,15 +280,19 @@ export function buildModel() {
       0.4
     );
     const tube = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, Math.max(28, points.length * 12), 0.0055, 10, false),
+      new THREE.TubeGeometry(curve, Math.max(28, points.length * 12), 0.0074, 12, false),
       materials.tube
     );
     tube.renderOrder = 1;
     group.add(tube);
-    const flow = makeFlow(curve, materials, 0.0155);
+    const flow = makeFlow(curve, materials, 0.0155, 0.006);
     group.add(flow.object);
+    tubeFlows.push(flow);
     flows.push(flow);
   }
+
+  const membraneInFlow = tubeFlows[5];
+  const membraneOutFlow = tubeFlows[6];
 
   // Water inside each cartridge: down the annulus, in front of the media.
   for (const c of cartridges) {
@@ -291,10 +302,75 @@ export function buildModel() {
       new THREE.Vector3(c.x, 0.12, CART_Z + 0.03),
       new THREE.Vector3(c.x, CART_Y0 + 0.006, CART_Z + 0.028),
     ]);
-    const flow = makeFlow(curve, materials, 0.017, 0.0046);
+    const flow = makeFlow(curve, materials, 0.017, 0.0048);
     group.add(flow.object);
+    c.flow = flow;
     flows.push(flow);
   }
+
+  /* ------------------------------------------------- cartridge 3 bypass */
+
+  // A manual bypass loop around the membrane, the path a service valve opens
+  // when the cartridge is taken out of circuit. It is plumbed all the time but
+  // only shown — and only carries particles — while the simulation is bypassed.
+  const bypassX = CART_X[2];
+  const bypassCurve = new THREE.CatmullRomCurve3(
+    [
+      [bypassX, 0.312, 0.014],
+      [bypassX, 0.298, 0.041],
+      [bypassX, 0.24, 0.053],
+      [bypassX, 0.13, 0.054],
+      [bypassX, 0.065, 0.032],
+      [bypassX, 0.05, 0],
+      [bypassX, 0.065, -0.032],
+      [bypassX, 0.13, -0.054],
+      [bypassX, 0.24, -0.053],
+      [bypassX, 0.298, -0.041],
+      [bypassX, 0.312, -0.014],
+    ].map((p) => new THREE.Vector3(...p)),
+    false,
+    "catmullrom",
+    0.4
+  );
+
+  const bypass = new THREE.Group();
+  bypass.visible = false;
+
+  const bypassTube = new THREE.Mesh(
+    new THREE.TubeGeometry(bypassCurve, 150, 0.0074, 12, false),
+    materials.tube
+  );
+  bypassTube.renderOrder = 1;
+  bypass.add(bypassTube);
+
+  const bypassFlow = makeFlow(bypassCurve, materials, 0.0145, 0.006);
+  bypass.add(bypassFlow.object);
+  flows.push(bypassFlow);
+
+  // Handwheel valve on the front run, at the height a hand reaches.
+  const valveBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.0105, 0.0105, 0.02, 20),
+    materials.black
+  );
+  valveBody.position.set(bypassX, 0.155, 0.054);
+  bypass.add(valveBody);
+
+  const valveStem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.0028, 0.0028, 0.016, 12),
+    materials.brass
+  );
+  valveStem.position.set(bypassX, 0.171, 0.054);
+  bypass.add(valveStem);
+
+  const valveWheel = new THREE.Mesh(
+    new THREE.TorusGeometry(0.0085, 0.0022, 8, 24),
+    materials.brass
+  );
+  valveWheel.rotation.x = Math.PI / 2;
+  valveWheel.position.set(bypassX, 0.179, 0.054);
+  bypass.add(valveWheel);
+
+  group.add(bypass);
 
   // Wiring harness and sensor cables, routed up the back wall into the
   // controller's glands.
@@ -340,8 +416,19 @@ export function buildModel() {
     faultStage = stageId;
     const stageIds = ["sediment", "carbon", "membrane"];
     cartridges.forEach((c, i) => {
-      c.setFault(stageIds[i] === stageId ? mode : "ok");
+      const active = stageIds[i] === stageId;
+      c.setFault(active ? mode : "ok");
+      // No water through a cartridge that is out of the loop: a removed housing
+      // is empty and a bypassed membrane has the valve path instead.
+      if (c.flow) {
+        c.flow.object.visible = !(active && (mode === "removed" || mode === "bypassed"));
+      }
     });
+
+    const bypassing = stageId === "membrane" && mode === "bypassed";
+    bypass.visible = bypassing;
+    membraneInFlow.object.visible = !bypassing;
+    membraneOutFlow.object.visible = !bypassing;
   }
 
   function setDisplay(reading) {
@@ -361,7 +448,7 @@ export function buildModel() {
   function update(dt, flow) {
     // Particle speed is proportional to flow: no flow, no motion.
     const speed = Math.max(0, flow) * 1.15;
-    for (const f of flows) f.update(dt, speed);
+    for (const f of flows) if (f.object.visible) f.update(dt, speed);
   }
 
   return {
@@ -423,7 +510,7 @@ function makeCartridge({ x, media, materials, occluders }) {
   // the front of the unit.
   for (const dz of [0.014, -0.014]) {
     const port = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.0058, 0.0058, 0.016, 16),
+      new THREE.CylinderGeometry(0.0074, 0.0074, 0.016, 16),
       materials.brass
     );
     port.position.set(x, CART_Y1 + 0.012, CART_Z + dz);
@@ -509,21 +596,22 @@ function makeCartridge({ x, media, materials, occluders }) {
     inner.add(core);
     occluders.push(core);
 
-    // Spiral wrap: one helix around the membrane.
+    // Spiral wrap: the wound membrane leaf, eleven turns up the cartridge, so
+    // the element reads as a spiral rather than a plain blue cylinder.
     const pts = [];
-    for (let i = 0; i <= 120; i++) {
-      const t = i / 120;
-      const a = t * Math.PI * 2 * 7;
+    for (let i = 0; i <= 220; i++) {
+      const t = i / 220;
+      const a = t * Math.PI * 2 * 11;
       pts.push(
         new THREE.Vector3(
-          x + Math.cos(a) * 0.0242,
+          x + Math.cos(a) * 0.0248,
           0.08 + t * 0.19,
-          CART_Z + Math.sin(a) * 0.0242
+          CART_Z + Math.sin(a) * 0.0248
         )
       );
     }
     const wrap = new THREE.Mesh(
-      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 220, 0.0012, 5, false),
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 340, 0.0024, 6, false),
       materials.membraneWrap
     );
     inner.add(wrap);
@@ -589,7 +677,7 @@ function makePressureModule(materials) {
     g.add(nut);
 
     const fitting = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.0048, 0.0048, 0.014, 12),
+      new THREE.CylinderGeometry(0.0062, 0.0062, 0.014, 12),
       materials.brass
     );
     fitting.rotation.z = Math.PI / 2;
@@ -625,7 +713,7 @@ function makeFlowSensor(materials) {
 
   for (const sx of [-1, 1]) {
     const fitting = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.0052, 0.0052, 0.012, 12),
+      new THREE.CylinderGeometry(0.0066, 0.0066, 0.012, 12),
       materials.brass
     );
     fitting.rotation.z = Math.PI / 2;
@@ -649,7 +737,7 @@ function makeTdsProbe(materials) {
 
   for (const sx of [-1, 1]) {
     const collar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.0068, 0.0068, 0.01, 12),
+      new THREE.CylinderGeometry(0.0074, 0.0074, 0.01, 12),
       materials.brass
     );
     collar.rotation.z = Math.PI / 2;
@@ -662,8 +750,8 @@ function makeTdsProbe(materials) {
 
 function makeController(materials) {
   const group = new THREE.Group();
-  const WIDTH = 0.096;
-  const HEIGHT = 0.05;
+  const WIDTH = 0.116;
+  const HEIGHT = 0.062;
   const DEPTH = 0.03;
   const FONT = "'Inter Variable', Inter, system-ui, sans-serif";
 
@@ -703,22 +791,22 @@ function makeController(materials) {
   group.add(face);
 
   // Recessed bezel around the display.
-  const bezel = roundedBox(0.074, 0.038, 0.004, 0.0012, materials.rubber);
-  bezel.position.set(-0.007, 0.001, DEPTH / 2 + 0.002);
+  const bezel = roundedBox(0.088, 0.048, 0.004, 0.0012, materials.rubber);
+  bezel.position.set(-0.008, 0.001, DEPTH / 2 + 0.002);
   group.add(bezel);
 
   const canvas = document.createElement("canvas");
   canvas.width = 384;
   canvas.height = 192;
-  let lastLines = ["FILTER HEALTH", "ALL OK", "0.45 L/MIN   412 > 38 PPM"];
+  let lastLines = ["SIMULATED MODEL", "ALL OK", "0.45 L/MIN   412 > 38 PPM"];
   const ctx = canvas.getContext("2d");
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
 
   const screenMat = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.066, 0.032), screenMat);
-  screen.position.set(-0.007, 0.001, DEPTH / 2 + 0.0046);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.082, 0.041), screenMat);
+  screen.position.set(-0.008, 0.001, DEPTH / 2 + 0.0046);
   group.add(screen);
 
   // One status LED, right of the display.
@@ -731,7 +819,7 @@ function makeController(materials) {
     ledMat
   );
   led.rotation.x = Math.PI / 2;
-  led.position.set(0.038, -0.0145, DEPTH / 2 + 0.0022);
+  led.position.set(0.048, -0.017, DEPTH / 2 + 0.0022);
   group.add(led);
 
   const ledRing = new THREE.Mesh(
@@ -742,7 +830,7 @@ function makeController(materials) {
   group.add(ledRing);
 
   // Cable glands on the underside, where the sensor harness enters.
-  for (const gx of [-0.03, 0, 0.03]) {
+  for (const gx of [-0.036, 0, 0.036]) {
     const gland = new THREE.Mesh(
       new THREE.CylinderGeometry(0.0042, 0.0042, 0.009, 16),
       materials.rubber
@@ -759,21 +847,21 @@ function makeController(materials) {
 
     ctx.fillStyle = "#8e908a";
     ctx.textBaseline = "top";
-    ctx.font = `500 16px ${FONT}`;
+    ctx.font = `500 19px ${FONT}`;
     ctx.fillText(lines[0], 18, 12);
 
     ctx.fillStyle = "#f0efe9";
     const maxWidth = canvas.width - 36;
-    let size = 48;
+    let size = 52;
     do {
       ctx.font = `650 ${size}px ${FONT}`;
       size -= 2;
-    } while (ctx.measureText(lines[1]).width > maxWidth && size > 22);
+    } while (ctx.measureText(lines[1]).width > maxWidth && size > 24);
     ctx.fillText(lines[1], 18, 36);
 
-    ctx.fillStyle = "#a4a59e";
-    ctx.font = `450 18px ${FONT}`;
-    ctx.fillText(lines[2], 18, 136);
+    ctx.fillStyle = "#b6b7af";
+    ctx.font = `450 25px ${FONT}`;
+    ctx.fillText(lines[2], 18, 126);
 
     texture.needsUpdate = true;
   }
@@ -821,6 +909,10 @@ function createMaterials() {
     metalness: 0,
   });
 
+  // One speckle sheet serves as colour and relief on the sediment core: the
+  // cartridge should read as loaded media, not a blank white cylinder.
+  const sedimentMap = sedimentTexture();
+
   return {
     shell,
     board,
@@ -858,8 +950,11 @@ function createMaterials() {
     }),
     sediment: new THREE.MeshStandardMaterial({
       color: 0xe2e9ec,
-      roughness: 0.88,
+      roughness: 0.9,
       metalness: 0,
+      map: sedimentMap,
+      bumpMap: sedimentMap,
+      bumpScale: 0.0016,
     }),
     sedimentRib: new THREE.MeshStandardMaterial({
       color: 0xdbe3e6,
@@ -924,6 +1019,47 @@ function dotTexture() {
   ctx.fill();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/* Speckled sheet for the sediment element: pale media with trapped grit, fine
+   enough to read as filtration depth at this scale. */
+function sedimentTexture() {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#e8eef0";
+  ctx.fillRect(0, 0, size, size);
+
+  const greys = ["#cfd8db", "#c3cdd1", "#b6c1c5", "#a8b4b8"];
+  for (let i = 0; i < 2600; i++) {
+    const r = 0.4 + Math.random() * 1.5;
+    ctx.fillStyle = greys[(Math.random() * greys.length) | 0];
+    ctx.globalAlpha = 0.22 + Math.random() * 0.4;
+    ctx.beginPath();
+    ctx.arc(Math.random() * size, Math.random() * size, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // A few darker grains, the material the cartridge has already caught.
+  ctx.fillStyle = "#7d888c";
+  for (let i = 0; i < 260; i++) {
+    ctx.globalAlpha = 0.25 + Math.random() * 0.45;
+    ctx.beginPath();
+    ctx.arc(Math.random() * size, Math.random() * size, 0.6 + Math.random() * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 3);
+  tex.anisotropy = 4;
   return tex;
 }
 

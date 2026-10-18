@@ -62,7 +62,7 @@
               Cartridge 2 removed
             </button>
             <button type="button" class="ctrl" data-state="bypassed" aria-pressed="false">
-              Bypassed
+              Cartridge 3 bypassed
             </button>
           </div>
 
@@ -72,8 +72,8 @@
               Normalised pressure drop sits at the new-cartridge baseline.
             </p>
             <p class="verdict-logic">
-              Detection rule: normalised ΔP below 0.35× baseline means the cartridge
-              was removed or bypassed.
+              Detection rule: a stage below 0.35× its baseline has left the water
+              path. Simulated values from a model.
             </p>
           </div>
 
@@ -117,7 +117,8 @@
                 </button>
               </div>
               <p class="stage-note">
-                Drag to orbit, scroll to zoom. Model output — concept, not a prototype.
+                Drag to orbit, scroll to zoom. Simulated values from a model —
+                concept, not a prototype.
               </p>
             </div>
           </div>
@@ -129,7 +130,7 @@
           <p class="readout-title">Live trace</p>
           <p class="readout-note">
             Pressure drop across each stage, divided by flow, as a fraction of its
-            new-cartridge baseline. Last 40 seconds.
+            new-cartridge baseline. Last 40 seconds. Simulated values from a model.
           </p>
         </div>
         <figure class="trace">
@@ -154,28 +155,31 @@
             </thead>
             <tbody id="stage-rows">
               <tr data-stage="sediment">
-                <th scope="row">Sediment</th>
-                <td data-cell="dp">18.0</td>
+                <th scope="row">Sediment<span class="row-taps">P1→P2</span></th>
+                <td data-cell="dp">18.9</td>
                 <td data-cell="ratio">1.00×</td>
                 <td data-cell="status">Normal</td>
               </tr>
               <tr data-stage="carbon">
-                <th scope="row">Carbon</th>
-                <td data-cell="dp">10.0</td>
+                <th scope="row">Carbon<span class="row-taps">P2→P3</span></th>
+                <td data-cell="dp">10.6</td>
                 <td data-cell="ratio">1.00×</td>
                 <td data-cell="status">Normal</td>
               </tr>
               <tr data-stage="membrane">
-                <th scope="row">Membrane</th>
-                <td data-cell="dp">248.0</td>
+                <th scope="row">Membrane<span class="row-taps">P3→P4</span></th>
+                <td data-cell="dp">226.4</td>
                 <td data-cell="ratio">1.00×</td>
                 <td data-cell="status">Normal</td>
               </tr>
             </tbody>
           </table>
+          <p class="readout-foot" id="ladder-note">
+            P1 300.0 → P2 281.1 → P3 270.5 → P4 44.1 kPa at 0.45 L/min.
+          </p>
           <p class="readout-foot">
             Inlet and outlet TDS hold steady in every simulated state. Total dissolved
-            solids cannot see a missing cartridge.
+            solids cannot see a missing cartridge. Simulated values from a model.
           </p>
         </div>
       </section>
@@ -296,10 +300,9 @@
           </ol>
           <p>
             Each state is read at 0.25, 0.40 and 0.55 L/min, three repeats, with water
-            temperature logged. The run passes if normalised ΔP repeats within ±4%,
-            the removed and bypassed states sit at least ten times below baseline
-            separation, and a loaded stage is flagged before flow falls below
-            0.30 L/min.
+            temperature logged. Bench-test targets, not results: normalised ΔP repeats
+            within ±4%; removed and bypassed states read below 0.35× baseline; a loaded
+            stage is flagged before flow falls below 0.30 L/min.
           </p>
         </div>
       </section>
@@ -308,7 +311,7 @@
         <h2 class="section-label" id="bom-label">Bill of materials</h2>
         <div class="section-body wide">
           <p class="lead">
-            Nine sensors and one controller, at single-unit prototype prices.
+            Seven sensors and one controller, at single-unit prototype prices.
           </p>
           <div class="table-scroll">
             <table class="bom">

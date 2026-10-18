@@ -69,16 +69,44 @@ applyState("new");
    silhouette every frame, so no callout can land on the cartridges, and the
    leader is aimed from the dot to the nearest edge of its body. */
 const labels = [
-  { anchor: "p1", stage: 0, name: "P1–P2 · SEDIMENT", unit: "kPa", digits: 1, row: true },
-  { anchor: "p2", stage: 1, name: "P2–P3 · CARBON", unit: "kPa", digits: 1, row: true },
-  { anchor: "p3", stage: 2, name: "P3–P4 · MEMBRANE", unit: "kPa", digits: 1, row: true },
+  {
+    anchor: "p1",
+    name: "P1 · FEED",
+    unit: "kPa",
+    digits: 1,
+    row: true,
+    read: (r) => r.pressures[0],
+    sub: () => "inlet pressure",
+  },
+  {
+    anchor: "p2",
+    name: "P2 · AFTER SEDIMENT",
+    unit: "kPa",
+    digits: 1,
+    row: true,
+    stage: 0,
+    read: (r) => r.pressures[1],
+    sub: (r) => `−${r.stages[0].dp.toFixed(1)} kPa sediment`,
+  },
+  {
+    anchor: "p3",
+    name: "P3 · AFTER CARBON",
+    unit: "kPa",
+    digits: 1,
+    row: true,
+    stage: 1,
+    read: (r) => r.pressures[2],
+    sub: (r) => `−${r.stages[1].dp.toFixed(1)} kPa carbon`,
+  },
   {
     anchor: "p4",
-    name: "OUTLET · P4",
+    name: "P4 · OUTLET",
     unit: "kPa",
-    digits: 0,
+    digits: 1,
     row: true,
+    stage: 2,
     read: (r) => r.pressures[3],
+    sub: (r) => `−${r.stages[2].dp.toFixed(1)} kPa membrane`,
   },
   {
     anchor: "flow",
@@ -137,7 +165,14 @@ for (const label of labels) {
   unitEl.textContent = label.unit;
   valEl.append(valueNode, unitEl);
 
+  // Second line: the drop that produced this reading, so the callout shows the
+  // ladder as well as the absolute pressure.
+  const subEl = document.createElement("span");
+  subEl.className = "lbl-sub";
+  if (label.sub) subEl.textContent = "—";
+
   body.append(nameEl, valEl);
+  if (label.sub) body.append(subEl);
   el.append(dot, leader, body);
   labelsEl.append(el);
 
@@ -145,6 +180,7 @@ for (const label of labels) {
   label.body = body;
   label.leader = leader;
   label.valueNode = valueNode;
+  label.subEl = label.sub ? subEl : null;
   label.shown = false;
   label.at = { x: 0, y: 0 };
   label.size = null;
@@ -163,22 +199,22 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const PRESETS = {
   overview: {
     direction: new THREE.Vector3(0.55, 0.27, 0.86),
-    fill: { x: 0.66, y: 0.8 },
+    fill: { x: 0.82, y: 0.9 },
     zoom: 1,
   },
   cutaway: {
     direction: new THREE.Vector3(0.72, 0.2, 0.7),
-    fill: { x: 0.66, y: 0.8 },
+    fill: { x: 0.82, y: 0.9 },
     zoom: 0.98,
   },
   top: {
     direction: new THREE.Vector3(0.5, 0.9, 0.55),
-    fill: { x: 0.8, y: 0.78 },
+    fill: { x: 0.9, y: 0.86 },
     zoom: 1,
   },
   detail: {
     direction: new THREE.Vector3(1, 0.12, 0.28),
-    fill: { x: 0.8, y: 0.86 },
+    fill: { x: 0.88, y: 0.94 },
     zoom: 1,
     // The cartridge stack, not the whole cabinet, is the subject here.
     box: new THREE.Box3(
@@ -274,7 +310,7 @@ function presetView(preset, aspect) {
   const portrait = aspect < 0.9;
   const fill = {
     // Portrait: the side callouts are gone, so the unit can use the width.
-    x: preset.fill.x * (portrait ? 1.25 : 1),
+    x: preset.fill.x * (portrait ? 1.06 : 1),
     y: preset.fill.y * (portrait ? 0.9 : 1),
   };
   const box = preset.box ?? modelBox;
@@ -544,58 +580,76 @@ for (const tr of document.querySelectorAll("#stage-rows tr[data-stage]")) {
 
 const STATUS_TEXT = { low: "Low", normal: "Normal", high: "High" };
 
+const ladderNote = document.getElementById("ladder-note");
+
 function syncReadouts(reading) {
   for (let i = 0; i < STAGES.length; i++) {
     const stage = reading.stages[i];
     const row = rows.get(stage.id);
-    if (row) {
-      setText(row.dp, stage.dp.toFixed(1));
-      setText(row.ratio, `${stage.ratio.toFixed(2)}×`);
-      setText(row.status, STATUS_TEXT[stage.status] ?? "Normal");
-      row.tr.classList.toggle("is-fault", stage.status !== "normal");
-    }
+    if (!row) continue;
+    setText(row.dp, stage.dp.toFixed(1));
+    setText(row.ratio, `${stage.ratio.toFixed(2)}×`);
+    setText(row.status, STATUS_TEXT[stage.status] ?? "Normal");
+    row.tr.classList.toggle("is-fault", stage.status !== "normal");
+  }
 
-    const label = labels.find((l) => l.stage === i);
-    if (label) {
-      if (setText(label.valueNode, stage.dp.toFixed(label.digits))) {
-        label.size = null;
-      }
-      // A rising differential is a warning; a collapsed one means the stage is
-      // out of the loop, and that reads as a fault.
+  // Four absolute pressures, each with the drop that produced it. Written from
+  // the same reading object the table and the verdict use.
+  for (const label of labels) {
+    if (setText(label.valueNode, label.read(reading).toFixed(label.digits))) {
+      label.size = null;
+    }
+    if (label.subEl && setText(label.subEl, label.sub(reading))) {
+      label.size = null;
+    }
+    // A tap takes the colour of the stage that ends at it.
+    if (label.stage !== undefined) {
+      const stage = reading.stages[label.stage];
       label.el.classList.toggle("is-warn", stage.status === "high");
       label.el.classList.toggle("is-fault", stage.status === "low");
     }
   }
 
+  if (ladderNote) {
+    setText(ladderNote, `${ladderLine(reading)} kPa at ${reading.flow.toFixed(2)} L/min.`);
+  }
+
   const mode = faultMode(reading);
-  if (model) model.setFault(reading.verdict.stageId, mode);
+  if (model) model.setFault(faultStage(reading), mode);
   if (model) model.setDisplay(displayLines(reading));
   if (model) {
     model.setStatus(
-      reading.verdict.level !== "fault"
+      reading.verdict.level === "settling"
         ? "ok"
-        : mode === "clogged"
-          ? "warn"
-          : "fault"
+        : reading.verdict.level !== "fault"
+          ? "ok"
+          : mode === "clogged"
+            ? "warn"
+            : "fault"
     );
   }
+}
 
-  for (const label of labels) {
-    if (label.stage !== undefined) continue;
-    if (setText(label.valueNode, label.read(reading).toFixed(label.digits))) {
-      label.size = null;
-    }
-  }
+function ladderLine(reading) {
+  return reading.pressures.map((p, i) => `P${i + 1} ${p.toFixed(1)}`).join(" → ");
 }
 
 /* What the scene should show for the simulated state: a clogged cartridge is
    tinted and still full, a missing one leaves an empty housing, a bypassed one
-   is present but out of circuit. */
+   is present but out of circuit. Derived from the state, not the verdict, so the
+   unit never waits on the reading to change what is physically in it. */
 function faultMode(reading) {
-  if (reading.verdict.level !== "fault") return "ok";
+  if (reading.state === "clogged") return "clogged";
   if (reading.state === "removed") return "removed";
   if (reading.state === "bypassed") return "bypassed";
-  return "clogged";
+  return "ok";
+}
+
+function faultStage(reading) {
+  if (reading.state === "clogged") return "sediment";
+  if (reading.state === "removed") return "carbon";
+  if (reading.state === "bypassed") return "membrane";
+  return null;
 }
 
 function syncVerdict(reading) {
@@ -613,14 +667,15 @@ function displayLines(reading) {
   const stage = reading.stages.find((s) => s.id === verdict.stageId);
   let status = "ALL OK";
 
-  if (verdict.level === "fault" && stage) {
+  if (verdict.level === "settling") status = "SETTLING";
+  else if (verdict.level === "fault" && stage) {
     if (reading.state === "removed") status = `CART ${stage.index} MISSING`;
     else if (reading.state === "bypassed") status = `CART ${stage.index} BYPASSED`;
     else status = `CART ${stage.index} CLOGGED`;
   }
 
   return [
-    "FILTER HEALTH",
+    "SIMULATED MODEL",
     status,
     `${reading.flow.toFixed(2)} L/MIN   ${Math.round(
       reading.tdsIn
@@ -645,12 +700,13 @@ function setText(node, value) {
 /* ---------------------------------------------------------------- projection */
 
 const LAYOUT = {
-  margin: 8,
+  margin: 14,
   rowGap: 16,
   rowGapTight: 8,
   sideGap: 14,
   stackGap: 8,
   rowFootGap: 12,
+  rowSilhouetteGap: 10,
 };
 
 function showLabel(label) {
@@ -761,8 +817,10 @@ function placeBody(label, left, top, size) {
 
 /* The pressure taps are a row of neighbours, so their callouts are a row too:
    centred above the unit, wrapping onto a second line when the stage is
-   narrow. A column would stack four leaders over the same cartridges. */
-function placeRow(items, rect) {
+   narrow. The row is anchored to the unit's projected top edge rather than to
+   the top of the stage, which keeps every leader a short hop from its tap
+   instead of a diagonal across the cabinet. */
+function placeRow(items, rect, silhouette) {
   const gap = rect.width < 480 ? LAYOUT.rowGapTight : LAYOUT.rowGap;
   const available = rect.width - LAYOUT.margin * 2;
   const lines = [];
@@ -783,7 +841,17 @@ function placeRow(items, rect) {
   }
   if (line.length) lines.push({ items: line, width });
 
-  let top = LAYOUT.margin;
+  const lineGap = Math.min(gap, 8);
+  const total =
+    lines.reduce((sum, row) => sum + Math.max(...row.items.map((e) => e.size.h)), 0) +
+    lineGap * Math.max(0, lines.length - 1);
+
+  // Bottom-anchored to the unit: as low as the model allows, never above the
+  // stage padding.
+  const limit = Number.isFinite(silhouette.top)
+    ? silhouette.top - LAYOUT.rowSilhouetteGap
+    : rect.height;
+  let top = Math.max(LAYOUT.margin, limit - total);
   let bottom = top;
 
   for (const row of lines) {
@@ -797,7 +865,7 @@ function placeRow(items, rect) {
 
     top += height;
     bottom = top;
-    top += Math.min(gap, 8);
+    top += lineGap;
   }
 
   return bottom;
@@ -845,7 +913,8 @@ function layoutLabels(anchors, rect, silhouette) {
   // The row is measured first: it sets how far down the side columns may start.
   const rowBottom = placeRow(
     anchors.filter((item) => item.label.row),
-    rect
+    rect,
+    silhouette
   );
   placeSides(
     anchors.filter((item) => item.label.side),

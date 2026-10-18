@@ -390,6 +390,17 @@ h1 {
   margin-left: 3px;
 }
 
+/* The drop that produced the reading, under the absolute pressure. */
+.lbl-sub {
+  display: block;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
 .lbl.is-fault .lbl-dot {
   background: var(--fault);
 }
@@ -668,6 +679,21 @@ h1 {
   line-height: 1.5;
   color: var(--ink-3);
   max-width: 38ch;
+}
+
+#ladder-note {
+  max-width: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-taps {
+  display: block;
+  margin-top: 1px;
+  font-size: 9px;
+  font-weight: 450;
+  letter-spacing: 0.015em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Sections */
@@ -1095,6 +1121,48 @@ h1 {
 }
 
 @media (max-width: 760px) {
+  /* The model leads: title and standfirst, then the unit, then the state
+     buttons under it where a thumb reaches, with the verdict last. */
+  .hero {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .hero-rail {
+    display: contents;
+  }
+
+  .kicker {
+    order: 1;
+  }
+
+  h1 {
+    order: 2;
+  }
+
+  .standfirst {
+    order: 3;
+  }
+
+  .stage-frame {
+    order: 4;
+    margin-top: 20px;
+  }
+
+  .controls {
+    order: 5;
+    margin-top: 16px;
+  }
+
+  .verdict {
+    order: 6;
+  }
+
+  .disclaimer {
+    order: 7;
+  }
+
   .masthead {
     padding-block: 15px;
   }
@@ -1112,8 +1180,8 @@ h1 {
   }
 
   .stage {
-    height: 54svh;
-    min-height: 340px;
+    height: clamp(420px, 62svh, 560px);
+    min-height: 0;
   }
 
   .labels .lbl[data-optional="true"] {
@@ -1130,6 +1198,10 @@ h1 {
 
   .lbl-val {
     font-size: 12.5px;
+  }
+
+  .lbl-sub {
+    font-size: 8px;
   }
 
   .stage-note {
