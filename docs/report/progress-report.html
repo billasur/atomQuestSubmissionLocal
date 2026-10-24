@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>atomQUEST2026_TheCollector_AllianceUniversity_Track2_Report</title>
+<style>
+  :root {
+    --ink: #111211;
+    --ink-2: #3d403d;
+    --ink-3: #6f726c;
+    --rule: #d8d8d2;
+    --paper: #fdfdfb;
+    --accent: #8a6a1f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: A4; margin: 11mm 12mm; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    font-size: 9.1px;
+    line-height: 1.42;
+    background: var(--paper);
+  }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+
+  header.band {
+    border-top: 3px solid var(--ink);
+    border-bottom: 1px solid var(--rule);
+    padding: 8px 0 9px;
+    margin-bottom: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+  }
+  header.band h1 { font-size: 19px; letter-spacing: -0.02em; font-weight: 700; }
+  header.band .sub { font-size: 9.5px; color: var(--ink-2); margin-top: 2px; }
+  header.band .meta { text-align: right; font-size: 8.6px; color: var(--ink-2); line-height: 1.55; }
+  header.band .meta b { color: var(--ink); }
+
+  h2 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin: 10px 0 4px;
+    color: var(--ink);
+  }
+  h2 span.no { color: var(--accent); margin-right: 6px; }
+  p { margin-bottom: 4px; }
+  b { font-weight: 600; }
+  .muted { color: var(--ink-3); }
+  mark {
+    background: #fff3c4;
+    padding: 0 3px;
+    border-radius: 1px;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; }
+  th, td {
+    text-align: left;
+    padding: 2.5px 6px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { font-weight: 600; background: #f2f2ee; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.total td { border-top: 1.5px solid var(--ink); border-bottom: none; font-weight: 700; }
+  tr.ok td:first-child::before { content: "● "; color: #3d7a44; }
+  tr.part td:first-child::before { content: "◐ "; color: var(--accent); }
+  tr.risk td:first-child::before { content: "○ "; color: #a33a2c; }
+
+  .cols { display: flex; gap: 14px; }
+  .cols > div { flex: 1; min-width: 0; }
+
+  .figrow { display: flex; gap: 8px; margin: 6px 0 2px; page-break-inside: avoid; }
+  .figrow figure { margin: 0; flex: 1; }
+  .figrow img { width: 100%; display: block; border: 1px solid var(--rule); }
+  .figrow figcaption { font-size: 7.6px; color: var(--ink-3); margin-top: 3px; }
+
+  ul { margin: 2px 0 4px 13px; }
+  li { margin-bottom: 2px; }
+
+  .statrow { display: flex; gap: 8px; margin: 5px 0 6px; }
+  .stat {
+    flex: 1;
+    border: 1px solid var(--rule);
+    padding: 5px 7px;
+  }
+  .stat .v { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+  .stat .k { font-size: 7.6px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); margin-top: 1px; }
+
+  footer {
+    margin-top: 8px;
+    border-top: 1px solid var(--rule);
+    padding-top: 5px;
+    font-size: 7.8px;
+    color: var(--ink-3);
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ PAGE 1 ============================ -->
+<section class="page">
+  <header class="band">
+    <div>
+      <h1>The Collector — progress report</h1>
+      <p class="sub">An instrumented domestic RO purifier that measures the water path: per-stage pressure drop, pump health, and a fail-locked dispense.</p>
+    </div>
+    <div class="meta">
+      <b>atomQUEST 2026 · Round 2</b><br />
+      <mark>Team: The Collector</mark> · Alliance University, Bengaluru<br />
+      Track 2 — Water purifier <span class="muted">(confirm track number)</span><br />
+      Prahalad Singh Gaur · Sanskar Kharya<br />
+      25 October 2026
+    </div>
+  </header>
+
+  <h2><span class="no">1</span>Team, track and area of exploration</h2>
+  <p><b>The Collector</b> — Alliance University, Bengaluru. <b>Water purifier track (Track 2)</b>, area of exploration unchanged from the abstract: <b>measured filter health in domestic RO purifiers</b>. Team of two: Prahalad Singh Gaur (sensors, firmware, validation) and Sanskar Kharya (mechanical integration, enclosure, test rig).</p>
+
+  <h2><span class="no">2</span>The problem, and how we are solving it</h2>
+  <p>Filter life in a domestic RO is <b>estimated, never measured</b> — days and litres converted to a percentage. The only real sensors, TDS in and out, cannot see the water path: TDS reads conductivity, so it cannot detect a housing refitted <b>without its cartridge</b>, a bypassed membrane, or a loaded pre-filter — and WHO sets no health-based TDS guideline, so "TDS 12" is not a safety statement. India's service chain makes these failure modes routine: ~37.7 M waterborne-disease cases a year, AMC-dependent service visits, and documented counterfeit-cartridge incidents.</p>
+  <p><b>Our solution:</b> a pressure tap on both sides of every element in the water path — including the booster pump. At steady flow, ΔP ÷ Q is a <b>fingerprint of each cartridge</b>, recorded when new and re-checked at every service: a loaded stage climbs (≈3× baseline), a removed or bypassed stage collapses (&lt;0.35×), and the pump's measured <b>boost</b> gives a motor-health signal no domestic purifier carries today. Any water-path fault <b>locks the dispense valve</b> — detection that ends in protection, not just a warning light.</p>
+
+  <div class="statrow">
+    <div class="stat"><div class="v">5 + 1 + 2</div><div class="k">pressure taps · flow · TDS probes</div></div>
+    <div class="stat"><div class="v">0.35×</div><div class="k">baseline threshold = cartridge left the path</div></div>
+    <div class="stat"><div class="v">+ΔP/Q</div><div class="k">pump boost watched for a weak motor</div></div>
+    <div class="stat"><div class="v">4</div><div class="k">fail-safes: interlock, dry-run, leak, tank-full</div></div>
+  </div>
+
+  <h2><span class="no">3</span>Components and modules completed so far</h2>
+  <table>
+    <tr><th style="width:31%">Module</th><th>Status and evidence</th><th class="num" style="width:12%">Sourcing</th></tr>
+    <tr class="ok"><td>Water-path physics model</td><td>Per-stage ΔP = k·Q·R with flow normalisation; pump boost with flow droop; verified ladder P1 300 → P2 281 → P3 271 → P4 751 → P5 61 kPa at 0.45 L/min</td><td class="num">n/a</td></tr>
+    <tr class="ok"><td>Interactive 3D design twin</td><td>Cut-away model of the full water path (pump, tank, faucet, reject line, valves); 9 simulated states; live trace, table and controller display; runs on any phone browser</td><td class="num">n/a</td></tr>
+    <tr class="ok"><td>Four-state validation protocol</td><td>New / clogged / removed / bypassed + interlock test; bench targets written as targets (±4% repeatability, &lt;0.35× for removed/bypassed)</td><td class="num">n/a</td></tr>
+    <tr class="ok"><td>Bill of materials + bench plan</td><td>India-priced, vendor-pinned (Robu / KitsGuru / RO-spare markets); ten-day build sequence with cut-list</td><td class="num">ordered</td></tr>
+    <tr class="part"><td>Bench rig (hardware)</td><td>Components <mark>⟦ordered on 25 Oct / in hand⟧</mark>; plumbing and ESP32 firmware per the Week-1 plan in the abstract; first live ΔP logging scheduled 26–28 Oct</td><td class="num">in transit</td></tr>
+    <tr class="part"><td>Firmware (ESP32-S3)</td><td>Architecture fixed: 2 × ADS1115 (16-bit I2C) for all analogue channels, 20 Hz sampling with pump-cycle averaging, OLED status; bench bring-up this week</td><td class="num">in hand</td></tr>
+  </table>
+  <p><b>Sourcing risks flagged in the abstract — status:</b> the critical risk was water-safe pressure sensing. Resolved by specification: the common hobby die (XGZP6847) is <b>gas-only</b>, so we specified stainless-diaphragm G1/4 transducers (0–1.2 MPa, 0.5–4.5 V, ₹686–1,149 ea, verified in stock at KitsGuru/Robu) read through ADS1115 instead of the ESP32 ADC. All other line items have an Indian supplier with a verified listing; no import dependencies remain.</p>
+
+  <div class="figrow">
+    <figure>
+      <img src="assets/stage-overview.png" alt="3D design twin, normal operation" />
+      <figcaption><b>Normal operation.</b> Five pressure taps, booster pump plumbed between carbon and membrane, product line to the storage tank, reject line to drain. Simulated values — the bench rig exists to replace them with measurements.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/stage-removed.png" alt="Design twin: carbon cartridge removed" />
+      <figcaption><b>The fault today's purifiers cannot see.</b> Carbon housing refitted <b>without its cartridge</b>: the stage's normalised drop collapses to 0.06×, the display names "CART 2 MISSING", the dispense interlock locks the tap — while TDS out (38 ppm) is unchanged.</figcaption>
+    </figure>
+  </div>
+
+  <footer>
+    <span>atomQUEST2026_TheCollector_AllianceUniversity_Track2_Report</span>
+    <span>page 1 of 2</span>
+  </footer>
+</section>
+
+<!-- ============================ PAGE 2 ============================ -->
+<section class="page">
+  <h2><span class="no">4</span>Amount spent so far against the abstract's estimate</h2>
+  <table>
+    <tr><th>Head</th><th class="num">Abstract estimate</th><th class="num">Committed / spent</th><th>Notes</th></tr>
+    <tr><td>Sensors (5 × pressure, flow, 2 × TDS) + ADS1115 ×2</td><td class="num">₹3,010</td><td class="num"><mark>₹⟦ ⟧</mark></td><td>stainless transducers + 16-bit I2C ADC</td></tr>
+    <tr><td>Pump, valves, float switch, flow restrictor</td><td class="num">₹1,824</td><td class="num"><mark>₹⟦ ⟧</mark></td><td>E-Chen 75–100 GPD, 2 × solenoid, FR-450</td></tr>
+    <tr><td>Controller, OLED, relays, power (SMPS + buck)</td><td class="num">₹2,178</td><td class="num"><mark>₹⟦ ⟧</mark></td><td>ESP32-S3, 24 V 3 A SMPS, separate logic rail</td></tr>
+    <tr><td>Plumbing, cartridges, membrane, tank, enclosure</td><td class="num">₹4,150</td><td class="num"><mark>₹⟦ ⟧</mark></td><td>10" cartridges, 75 GPD membrane, 7 L tank</td></tr>
+    <tr><td>Contingency + reference gauge (validation only)</td><td class="num">₹2,038</td><td class="num"><mark>₹⟦ ⟧</mark></td><td>glycerin gauge shared lab equipment</td></tr>
+    <tr class="total"><td>Total prototype budget</td><td class="num">₹13,200</td><td class="num"><mark>₹⟦ ⟧</mark></td><td>abstract estimated <mark>₹⟦9,000–12,000 — confirm abstract figure⟧</mark></td></tr>
+  </table>
+  <p class="muted">Fill every ⟦ ⟧ from your order invoices before export. If a head differs from the abstract, keep the abstract column as written and explain the delta in §5 — judges check this table against the video.</p>
+
+  <h2><span class="no">5</span>Changes since the abstract</h2>
+  <ul>
+    <li><b>Track and area of exploration: unchanged.</b> Same problem, same solution class — measured per-stage filter health.</li>
+    <li><b>Revised target claim (additions, not pivots):</b> the abstract's four pressure sensors became <b>five taps with the pump between stages</b> — the pump is where a domestic RO actually raises pressure, and the tap pair around it yields a <b>pump-health signal</b> at the cost of one sensor. The instrumented path is now feed → sediment → carbon → <b>booster pump</b> → membrane → product → storage tank, matching a real domestic RO rather than a laboratory chain.</li>
+    <li><b>Added a fail-locked dispense interlock</b> to the safety set (abstract proposed detection only): on any water-path fault the dispense valve refuses to open. Reason: Round 2's brief asks for the status of a safety mechanism — a detection that cannot act was the wrong target claim.</li>
+    <li><b>Budget revised:</b> ₹⟦9,000–12,000⟧ → <b>₹13,200</b> (pump, solenoids, tank and the fifth transducer). No change to timeline; the ten-day bench plan in the abstract is on schedule — hardware ordering completed 25 Oct, four-state test planned 30 Oct.</li>
+  </ul>
+
+  <h2><span class="no">6</span>Status of the safety / fail-safe mechanisms</h2>
+  <table>
+    <tr><th style="width:24%">Fail-safe</th><th style="width:38%">Trigger → action</th><th>Status</th></tr>
+    <tr class="part"><td>Fail-locked dispense</td><td>any stage &lt; 0.35× baseline → dispense solenoid refuses, "DO NOT USE" on display</td><td>logic simulated end-to-end in the design twin (verified, reproducible); firmware task this week; solenoid in hand</td></tr>
+    <tr class="part"><td>Dry-run guard</td><td>P1 ≈ 0 kPa (no feed) → pump disabled, auto-resume when water returns</td><td>simulated; one firmware comparison on the live P1 channel</td></tr>
+    <tr class="part"><td>Leak shutdown</td><td>flow with the tap closed → inlet solenoid closes, pump stops</td><td>simulated; floor leak probe is two wires + a pull-up (₹0 effectively)</td></tr>
+    <tr class="part"><td>Tank-full stop</td><td>float switch opens at full storage → production pauses, resumes on draw</td><td>simulated incl. auto-resume; float switch in hand</td></tr>
+    <tr class="ok"><td>Pump watch</td><td>boost &lt; 0.75× its flow-normalised baseline → service warning before flow dies</td><td>simulated ("Weak pump" state); comes free with the five-tap layout</td></tr>
+  </table>
+  <p>Round 3 will demonstrate the interlock and dry-run guard <b>working on the bench rig</b>, benchmarked against NSF/ANSI 58's automatic shut-off expectation and IS 16240:2023's recovery requirement.</p>
+
+  <h2><span class="no">7</span>Planned next steps for Round 3</h2>
+  <ul>
+    <li><b>26–29 Oct:</b> bench plumbing and leak-test; ESP32 bring-up; zero/span calibration of all five taps against the reference gauge (±2% FS) and a static water column (9.81 kPa/m).</li>
+    <li><b>30 Oct – 1 Nov:</b> the four-state test at 0.25/0.40/0.55 L/min ×3 repeats; dust-loaded sediment characterisation; interlock and dry-run guard live in firmware; every reading logged with temperature.</li>
+    <li><b>1–3 Nov:</b> measure → twin: replace the 3D model's simulated constants with measured baselines, making it the rig's public dashboard.</li>
+    <li><b>Round 3 (if shortlisted):</b> integrate the instrumented path into the purifier shell; 2-minute video of the prototype in operation with the interlock demonstrated; mentor-pairing on manufacturing cost (target: sensor-set BOM &lt; ₹2,000 at volume) and on the pump-health claim, which is Atomberg's home ground.</li>
+  </ul>
+
+  <footer>
+    <span>The Collector — measured filter health · atomQUEST 2026, water purifier track</span>
+    <span>page 2 of 2</span>
+  </footer>
+</section>
+
+</body>
+</html>
