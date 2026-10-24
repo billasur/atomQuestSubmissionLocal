@@ -7,12 +7,12 @@
     <title>The Collector — measured filter health</title>
     <meta
       name="description"
-      content="The Collector: an instrumented compact RO purifier concept that measures pressure drop across each cartridge, so filter health is a reading instead of an estimate. atomQUEST 2026 water purifier track."
+      content="The Collector: an instrumented compact RO purifier concept that measures pressure drop across each cartridge and the booster pump's boost, so filter health is a reading instead of an estimate. atomQUEST 2026 water purifier track."
     />
     <meta property="og:title" content="The Collector — measured filter health" />
     <meta
       property="og:description"
-      content="An interactive 3D concept: four pressure sensors, one flow sensor, two TDS probes. Normalised pressure drop per cartridge detects a removed or bypassed filter. Simulated values from a model — not a built prototype."
+      content="An interactive 3D concept: five pressure taps, one flow sensor, two TDS probes, a booster pump and a storage tank. Normalised pressure drop per cartridge detects a removed or bypassed filter, and the dispense interlock refuses to serve water through a broken path. Simulated values from a model — not a built prototype."
     />
     <meta property="og:type" content="website" />
     <link
@@ -41,9 +41,9 @@
           <p class="kicker">An instrumented domestic RO purifier</p>
           <h1 id="hero-title">The<br />Collector</h1>
           <p class="standfirst">
-            Three cartridges, four pressure sensors. It measures the pressure drop
-            across each stage and reports which filter has left the water path —
-            instead of counting the days.
+            Three cartridges, a booster pump, five pressure taps. It measures the
+            drop across each stage and the pump's boost, and reports which filter
+            has left the water path — instead of counting the days.
           </p>
 
           <div class="controls" role="group" aria-label="Simulated filter state">
@@ -64,7 +64,29 @@
             <button type="button" class="ctrl" data-state="bypassed" aria-pressed="false">
               Cartridge 3 bypassed
             </button>
+            <button type="button" class="ctrl" data-state="weakpump" aria-pressed="false">
+              Weak pump
+            </button>
+            <button type="button" class="ctrl" data-state="dryrun" aria-pressed="false">
+              No feed water
+            </button>
+            <button type="button" class="ctrl" data-state="leak" aria-pressed="false">
+              Leak at base
+            </button>
+            <button type="button" class="ctrl" data-state="tankfull" aria-pressed="false">
+              Tank full
+            </button>
+            <button
+              type="button"
+              class="ctrl ctrl-dispense"
+              id="dispense"
+              aria-pressed="false"
+            >
+              Dispense a glass
+            </button>
           </div>
+
+          <p class="interlock-note" id="interlock-note" hidden></p>
 
           <div class="verdict" id="verdict" role="status" aria-live="polite">
             <p class="verdict-state" id="verdict-state">All three stages within range</p>
@@ -73,7 +95,8 @@
             </p>
             <p class="verdict-logic">
               Detection rule: a stage below 0.35× its baseline has left the water
-              path. Simulated values from a model.
+              path, and the dispense valve locks until the fault clears.
+              Simulated values from a model.
             </p>
           </div>
 
@@ -87,7 +110,7 @@
             <canvas
               id="scene"
               role="img"
-              aria-label="Cut-away 3D model of a compact white RO purifier showing three cartridges, blue tubing, four pressure sensor modules, a flow sensor, two TDS probes and a black controller with a display."
+              aria-label="Cut-away 3D model of a compact white RO purifier showing three cartridges, a booster pump, blue tubing, five pressure sensor modules, a flow sensor, two TDS probes, a storage tank with a dispense tap, and a black controller with a display."
             ></canvas>
             <div class="labels" id="labels" aria-hidden="true"></div>
 
@@ -130,7 +153,8 @@
           <p class="readout-title">Live trace</p>
           <p class="readout-note">
             Pressure drop across each stage, divided by flow, as a fraction of its
-            new-cartridge baseline. Last 40 seconds. Simulated values from a model.
+            new-cartridge baseline. The pump's boost is watched against its own
+            baseline the same way. Last 40 seconds. Simulated values from a model.
           </p>
         </div>
         <figure class="trace">
@@ -166,16 +190,22 @@
                 <td data-cell="ratio">1.00×</td>
                 <td data-cell="status">Normal</td>
               </tr>
+              <tr data-stage="pump">
+                <th scope="row">Pump<span class="row-taps">P3→P4 boost</span></th>
+                <td data-cell="dp">480.0</td>
+                <td data-cell="ratio">1.00×</td>
+                <td data-cell="status">Normal</td>
+              </tr>
               <tr data-stage="membrane">
-                <th scope="row">Membrane<span class="row-taps">P3→P4</span></th>
-                <td data-cell="dp">226.4</td>
+                <th scope="row">Membrane<span class="row-taps">P4→P5</span></th>
+                <td data-cell="dp">690.0</td>
                 <td data-cell="ratio">1.00×</td>
                 <td data-cell="status">Normal</td>
               </tr>
             </tbody>
           </table>
           <p class="readout-foot" id="ladder-note">
-            P1 300.0 → P2 281.1 → P3 270.5 → P4 44.1 kPa at 0.45 L/min.
+            P1 300.0 → P2 281.1 → P3 270.5 → P4 750.5 → P5 60.5 kPa at 0.45 L/min.
           </p>
           <p class="readout-foot">
             Inlet and outlet TDS hold steady in every simulated state. Total dissolved
@@ -224,13 +254,17 @@
         <h2 class="section-label" id="idea-label">Idea</h2>
         <div class="section-body">
           <p class="lead">
-            One pressure sensor before each cartridge, one after the last.
+            A pressure tap on both sides of every element in the water path —
+            including the pump.
           </p>
           <p>
             At a steady flow, the pressure lost across a cartridge is its resistance
             times the flow. Divide the measured drop by the flow and the reading
             becomes a property of the cartridge rather than of how much water the
-            household is using that evening.
+            household is using that evening. The booster pump's boost gets the same
+            treatment: the tap pair around it reads the motor's health, and a boost
+            sagging below its own baseline is a pump going weak long before the
+            flow dies.
           </p>
           <p class="formula" aria-label="Pressure drop equals k times flow times resistance">
             ΔP = k · Q · R<span class="formula-note">state</span>
@@ -252,6 +286,10 @@
             </div>
             <div>
               <dt>P3 → P4</dt>
+              <dd>Booster pump boost, watched for a weakening motor</dd>
+            </div>
+            <div>
+              <dt>P4 → P5</dt>
               <dd>RO membrane drop</dd>
             </div>
             <div>
@@ -297,12 +335,72 @@
               <span class="step-name">Cartridge 3 bypassed</span>
               <span class="step-text">A valve routes water around the membrane.</span>
             </li>
+            <li>
+              <span class="step-name">Interlock</span>
+              <span class="step-text">
+                With any water-path fault latched, the dispense valve refuses to open.
+              </span>
+            </li>
           </ol>
           <p>
             Each state is read at 0.25, 0.40 and 0.55 L/min, three repeats, with water
             temperature logged. Bench-test targets, not results: normalised ΔP repeats
-            within ±4%; removed and bypassed states read below 0.35× baseline; a loaded
+            within ±4%; removed and bypassed states read below 0.35× baseline; pump
+            boost repeats within ±8% at a given flow; a loaded
             stage is flagged before flow falls below 0.30 L/min.
+          </p>
+        </div>
+      </section>
+
+      <section class="section wrap" id="failsafes" aria-labelledby="failsafes-label">
+        <h2 class="section-label" id="failsafes-label">Fail-safes</h2>
+        <div class="section-body">
+          <p class="lead">
+            The water path is checked continuously, and the unit acts on what it finds.
+          </p>
+          <dl class="limits">
+            <div>
+              <dt>Fail-locked dispense.</dt>
+              <dd>
+                A stage below 0.35× baseline — a housing refitted without its
+                cartridge, or a bypassed membrane — locks the dispense valve. The
+                tap refuses until the fault clears. In the simulation, press
+                Dispense with a fault latched.
+              </dd>
+            </div>
+            <div>
+              <dt>Dry-run guard.</dt>
+              <dd>
+                No feed pressure stops the pump before it runs dry, and it resumes
+                on its own when water returns.
+              </dd>
+            </div>
+            <div>
+              <dt>Leak shutdown.</dt>
+              <dd>
+                Flow with the dispense tap closed closes the inlet solenoid and
+                stops the pump.
+              </dd>
+            </div>
+            <div>
+              <dt>Tank-full stop.</dt>
+              <dd>
+                The float switch pauses production at full storage; drawing water
+                reopens it automatically.
+              </dd>
+            </div>
+            <div>
+              <dt>Pump watch.</dt>
+              <dd>
+                Boost that sags below 0.75× its flow-normalised baseline is flagged
+                for service before the flow dies.
+              </dd>
+            </div>
+          </dl>
+          <p>
+            On the bench prototype the dispense interlock and the dry-run guard run
+            in firmware on the same controller that reads the sensors; the leak loop
+            closes a solenoid rather than only sounding an alarm.
           </p>
         </div>
       </section>
@@ -311,7 +409,8 @@
         <h2 class="section-label" id="bom-label">Bill of materials</h2>
         <div class="section-body wide">
           <p class="lead">
-            Seven sensors and one controller, at single-unit prototype prices.
+            Eight sensors, two safety switches and one controller, at single-unit
+            prototype prices.
           </p>
           <div class="table-scroll">
             <table class="bom">
@@ -328,8 +427,8 @@
                 <tr>
                   <th scope="row">Pressure sensor module</th>
                   <td>0–1 MPa, 0.5–4.5 V, brass port</td>
-                  <td class="num">4</td>
-                  <td class="num">₹1,520</td>
+                  <td class="num">5</td>
+                  <td class="num">₹1,900</td>
                 </tr>
                 <tr>
                   <th scope="row">Brass fittings and adapters</th>
@@ -348,6 +447,18 @@
                   <td>Inline, 0–2000 ppm</td>
                   <td class="num">2</td>
                   <td class="num">₹840</td>
+                </tr>
+                <tr>
+                  <th scope="row">Booster pump and valves</th>
+                  <td>24 V pump, inlet + dispense solenoids, float switch, leak probe</td>
+                  <td class="num">1 set</td>
+                  <td class="num">₹1,650</td>
+                </tr>
+                <tr>
+                  <th scope="row">Storage tank and tap</th>
+                  <td>7 L food-grade, chrome dispense tap</td>
+                  <td class="num">1</td>
+                  <td class="num">₹950</td>
                 </tr>
                 <tr>
                   <th scope="row">Controller</th>
@@ -383,7 +494,7 @@
                   <th scope="row">Build subtotal</th>
                   <td>Instrumented purifier, excluding reference</td>
                   <td class="num"></td>
-                  <td class="num">₹8,880</td>
+                  <td class="num">₹11,860</td>
                 </tr>
                 <tr class="aside-row">
                   <th scope="row">Reference gauge</th>
@@ -395,7 +506,7 @@
               <tfoot>
                 <tr>
                   <th scope="row" colspan="3">Prototype budget</th>
-                  <td class="num">₹9,000–12,000</td>
+                  <td class="num">₹11,000–14,000</td>
                 </tr>
               </tfoot>
             </table>

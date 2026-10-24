@@ -2,3 +2,4 @@ node_modules/
 dist/
 .ogcode/
 .env*
+.DS_Store

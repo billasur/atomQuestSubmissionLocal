@@ -26,6 +26,18 @@ const RAIL_Z = 0.012;
 // harness climbs the back wall and enters the enclosure from below.
 const CONTROLLER_Y = 0.374;
 
+// The booster pump is plumbed between the carbon outlet (P3) and the membrane
+// inlet (P4): a real domestic RO raises pressure at the membrane, not the
+// feed. Rubber feet put the pump body at the base like the real 24 V unit.
+const PUMP_POS = { x: 0.08, y: 0.072, z: -0.075 };
+
+// Storage tank on the open (cut-away) side, fed from the product tap. The
+// faucet draws from the tank, the way a domestic unit actually serves water.
+const TANK_X = 0.2;
+const TANK_Y0 = 0.045;
+const TANK_H = 0.33;
+const TANK_R = 0.042;
+
 export function buildModel() {
   const group = new THREE.Group();
   const occluders = [];
@@ -123,11 +135,19 @@ export function buildModel() {
   group.add(p3);
   anchors.p3 = new THREE.Vector3(CART_X[2], RAIL_Y, RAIL_Z);
 
+  // P4 sits on the pump's outlet riser: the membrane's feed pressure.
   const p4 = makePressureModule(materials);
-  p4.position.set(0.126, 0.3, 0.02);
-  p4.rotation.y = Math.PI / 2;
+  p4.position.set(0.139, 0.19, -0.02);
+  p4.rotation.z = Math.PI / 2;
   group.add(p4);
-  anchors.p4 = new THREE.Vector3(0.126, 0.3, 0.02);
+  anchors.p4 = new THREE.Vector3(0.139, 0.19, -0.02);
+
+  // P5: the product tap, after the membrane.
+  const p5 = makePressureModule(materials);
+  p5.position.set(0.126, 0.3, 0.02);
+  p5.rotation.y = Math.PI / 2;
+  group.add(p5);
+  anchors.p5 = new THREE.Vector3(0.126, 0.3, 0.02);
 
   // Flow sensor on the inlet.
   const flowSensor = makeFlowSensor(materials);
@@ -148,6 +168,9 @@ export function buildModel() {
   group.add(tdsOut);
   anchors.tdsOut = new THREE.Vector3(0.126, 0.3, 0.072);
 
+  // Storage tank level, read off the tank wall.
+  anchors.tank = new THREE.Vector3(TANK_X, 0.24, TANK_R - 0.012);
+
   // Grommet where the inlet crosses the side wall.
   const grommet = new THREE.Mesh(
     new THREE.TorusGeometry(0.009, 0.0025, 8, 20),
@@ -159,6 +182,8 @@ export function buildModel() {
 
   /* -------------------------------------------------------- pump / board */
 
+  // 24 V booster pump: the motor cylinder with brass end caps, standing on
+  // rubber feet at the base, plumbed into the water path between P3 and P4.
   const pump = new THREE.Group();
   const pumpBody = new THREE.Mesh(
     new THREE.CylinderGeometry(0.026, 0.026, 0.05, 24),
@@ -171,11 +196,19 @@ export function buildModel() {
   for (const sx of [-1, 1]) {
     const cap = new THREE.Mesh(
       new THREE.CylinderGeometry(0.028, 0.028, 0.008, 24),
-      materials.shell
+      materials.brass
     );
     cap.rotation.z = Math.PI / 2;
     cap.position.x = sx * 0.026;
     pump.add(cap);
+
+    // Rubber feet under the ends.
+    const foot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.008, 0.008, 0.036, 12),
+      materials.rubber
+    );
+    foot.position.set(sx * 0.017, -0.044, 0);
+    pump.add(foot);
   }
 
   const band = new THREE.Mesh(
@@ -186,9 +219,15 @@ export function buildModel() {
   band.position.x = -0.008;
   pump.add(band);
 
-  pump.position.set(-0.09, 0.075, -0.093);
+  pump.position.set(PUMP_POS.x, PUMP_POS.y, PUMP_POS.z);
   group.add(pump);
   occluders.push(pumpBody);
+
+  // Power supply on the back wall, left of the controller.
+  const smps = roundedBox(0.075, 0.05, 0.026, 0.004, materials.black);
+  smps.position.set(-0.1, 0.374, -D / 2 + T + 0.015);
+  smps.castShadow = true;
+  group.add(smps);
 
   const controller = makeController(materials);
   // Wall-mounted above the sensor rail, glands down: the harness drops straight
@@ -242,34 +281,65 @@ export function buildModel() {
       [0.035, 0.339, 0.002],
       [0.059, 0.335, RAIL_Z],
     ],
-    // P3 right port → cartridge 3 inlet port
+    // P3 right port → down behind the board → pump suction
     [
       [0.111, 0.335, RAIL_Z],
-      [0.106, 0.33, 0.016],
-      [0.095, 0.324, 0.017],
+      [0.124, 0.305, 0.0],
+      [0.13, 0.24, -0.024],
+      [0.126, 0.15, -0.05],
+      [0.1, 0.085, -0.068],
+      [0.054, 0.072, -0.075],
+    ],
+    // pump outlet → P4 on the riser → cartridge 3 inlet port
+    [
+      [0.106, 0.072, -0.075],
+      [0.128, 0.08, -0.062],
+      [0.14, 0.12, -0.038],
+      [0.143, 0.19, -0.02],
+      [0.136, 0.26, -0.004],
+      [0.112, 0.31, 0.012],
       [0.085, 0.316, 0.015],
     ],
-    // cartridge 3 outlet port → P4
+    // cartridge 3 outlet port → P5
     [
       [0.085, 0.316, -0.015],
       [0.087, 0.325, -0.014],
       [0.105, 0.318, -0.01],
       [0.126, 0.303, -0.004],
     ],
-    // P4 → outlet TDS → out through the open side
+    // P5 → outlet TDS → up and over to the storage tank
     [
       [0.126, 0.3, 0.044],
-      [0.126, 0.3, 0.058],
-      [0.126, 0.3, 0.078],
-      [0.145, 0.297, 0.092],
-      [0.18, 0.285, 0.096],
-      [0.212, 0.27, 0.085],
+      [0.126, 0.3, 0.062],
+      [0.128, 0.305, 0.078],
+      [0.15, 0.33, 0.07],
+      [0.175, 0.352, 0.04],
+      [0.195, 0.375, 0.012],
+      [0.2, 0.392, 0.0],
+    ],
+    // membrane reject → flow restrictor → out under the back
+    [
+      [0.085, 0.04, 0.0],
+      [0.096, 0.03, -0.012],
+      [0.112, 0.024, -0.034],
+      [0.12, 0.022, -0.06],
+      [0.13, 0.022, -0.088],
+      [0.122, 0.02, -0.112],
+    ],
+    // tank outlet → faucet base: the draw comes from storage
+    [
+      [TANK_X, 0.06, 0.0],
+      [TANK_X, 0.06, 0.04],
+      [TANK_X, 0.1, 0.052],
+      [TANK_X, 0.142, 0.062],
+      [TANK_X, 0.155, 0.07],
     ],
   ];
 
-  // tubePaths 5 and 6 are cartridge 3's inlet and outlet legs; when the
+  // tubeFlows 6 and 7 are cartridge 3's inlet and outlet legs; when the
   // membrane is valved out the bypass loop takes the flow, so their particles
-  // stop. Captured here so the fault switch can find them.
+  // stop, along with the reject line. Captured here so the fault switch can
+  // find them.
   const tubeFlows = [];
 
   for (const points of tubePaths) {
@@ -291,8 +361,10 @@ export function buildModel() {
     flows.push(flow);
   }
 
-  const membraneInFlow = tubeFlows[5];
-  const membraneOutFlow = tubeFlows[6];
+  const membraneInFlow = tubeFlows[6];
+  const membraneOutFlow = tubeFlows[7];
+  const rejectFlow = tubeFlows[8];
+  const tankFeedFlow = tubeFlows[9];
 
   // Water inside each cartridge: down the annulus, in front of the media.
   for (const c of cartridges) {
@@ -372,6 +444,158 @@ export function buildModel() {
 
   group.add(bypass);
 
+  /* ------------------------------------------- tank, faucet, safety parts */
+
+  // Storage tank on the open side: clear wall, visible water column, float
+  // riding the surface. The plinth grounds it like the real tank cradle.
+  const tankGroup = new THREE.Group();
+
+  const tankWallMat = materials.clear.clone();
+  const tankWall = new THREE.Mesh(
+    new THREE.CylinderGeometry(TANK_R, TANK_R, TANK_H, 40, 1, true),
+    tankWallMat
+  );
+  tankWall.position.set(TANK_X, TANK_Y0 + TANK_H / 2, 0);
+  tankWall.renderOrder = 4;
+  tankGroup.add(tankWall);
+
+  const plinth = roundedBox(
+    TANK_R * 2 + 0.016,
+    0.045,
+    TANK_R * 2 + 0.016,
+    0.006,
+    materials.shell
+  );
+  plinth.position.set(TANK_X, 0.0225, 0);
+  plinth.castShadow = true;
+  plinth.receiveShadow = true;
+  tankGroup.add(plinth);
+
+  for (const capY of [TANK_Y0 - 0.006, TANK_Y0 + TANK_H + 0.006]) {
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(TANK_R + 0.003, TANK_R + 0.003, 0.012, 40),
+      materials.shell
+    );
+    cap.position.set(TANK_X, capY, 0);
+    cap.castShadow = true;
+    tankGroup.add(cap);
+    occluders.push(cap);
+  }
+
+  const tankPort = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.006, 0.006, 0.016, 12),
+    materials.brass
+  );
+  tankPort.position.set(TANK_X, TANK_Y0 + TANK_H + 0.014, 0);
+  tankGroup.add(tankPort);
+
+  const tankWater = new THREE.Mesh(
+    new THREE.CylinderGeometry(TANK_R - 0.006, TANK_R - 0.006, 1, 32),
+    materials.tankWater
+  );
+  // Lay the column out at the initial level now: the camera fit reads the
+  // model's bounding box before the first reading arrives, and an unscaled
+  // unit cylinder would double its height.
+  tankWater.scale.y = (TANK_H - 0.02) * 0.55;
+  tankWater.position.y = TANK_Y0 + 0.004 + tankWater.scale.y / 2;
+  tankWater.renderOrder = 3;
+  tankGroup.add(tankWater);
+
+  const float = roundedBox(0.02, 0.011, 0.015, 0.003, materials.black);
+  float.position.set(TANK_X + 0.013, TANK_Y0 + 0.004 + tankWater.scale.y - 0.006, 0.012);
+  tankGroup.add(float);
+
+  group.add(tankGroup);
+
+  // Dispense tap on the tank's front face, where a hand reaches.
+  const faucet = new THREE.Group();
+  const flange = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.0115, 0.0115, 0.006, 20),
+    materials.chrome
+  );
+  flange.rotation.x = Math.PI / 2;
+  flange.position.set(TANK_X, 0.155, 0.058);
+  faucet.add(flange);
+
+  const tapBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.0075, 0.0075, 0.032, 16),
+    materials.chrome
+  );
+  tapBody.rotation.x = Math.PI / 2;
+  tapBody.position.set(TANK_X, 0.155, 0.074);
+  faucet.add(tapBody);
+
+  const spout = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.006, 0.006, 0.018, 14),
+    materials.chrome
+  );
+  spout.position.set(TANK_X, 0.142, 0.09);
+  faucet.add(spout);
+
+  group.add(faucet);
+
+  // The drawn stream, visible only while the tap is open.
+  const streamCurve = new THREE.CatmullRomCurve3(
+    [
+      [TANK_X, 0.132, 0.09],
+      [TANK_X, 0.095, 0.09],
+      [TANK_X, 0.05, 0.09],
+      [TANK_X, 0.018, 0.09],
+    ].map((p) => new THREE.Vector3(...p)),
+    false,
+    "catmullrom",
+    0.4
+  );
+  const dispenseStream = makeFlow(streamCurve, materials, 0.008, 0.0045);
+  dispenseStream.object.visible = false;
+  group.add(dispenseStream.object);
+
+  // Inlet solenoid on the feed riser: the valve the leak logic closes.
+  const solenoid = new THREE.Group();
+  const solBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.009, 0.009, 0.032, 16),
+    materials.black
+  );
+  solBody.position.set(-0.1285, 0.155, -0.0225);
+  solBody.castShadow = true;
+  solenoid.add(solBody);
+  for (const sy of [-0.02, 0.02]) {
+    const collar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.0074, 0.0074, 0.01, 12),
+      materials.brass
+    );
+    collar.position.set(-0.1285, 0.155 + sy, -0.0225);
+    solenoid.add(collar);
+  }
+  group.add(solenoid);
+
+  // Leak probe at the base under the pump, plus the puddle it looks at.
+  const leakProbe = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.011, 0.011, 0.004, 20),
+    materials.black
+  );
+  leakProbe.position.set(0.085, 0.0125, -0.02);
+  group.add(leakProbe);
+
+  const puddleMat = materials.tankWater.clone();
+  puddleMat.opacity = 0;
+  const puddle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.058, 0.0015, 28),
+    puddleMat
+  );
+  puddle.position.set(0.075, 0.0108, -0.024);
+  puddle.visible = false;
+  group.add(puddle);
+
+  // Reject restrictor on the drain line.
+  const restrictor = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.005, 0.005, 0.014, 12),
+    materials.brass
+  );
+  restrictor.rotation.x = Math.PI / 2;
+  restrictor.position.set(0.126, 0.0215, -0.074);
+  group.add(restrictor);
+
   // Wiring harness and sensor cables, routed up the back wall into the
   // controller's glands.
   const cablePaths = [
@@ -392,6 +616,30 @@ export function buildModel() {
       [-0.06, 0.338, -0.098],
       [-0.026, 0.35, -0.095],
     ],
+    // inlet solenoid
+    [
+      [-0.1285, 0.14, -0.028],
+      [-0.132, 0.12, -0.06],
+      [-0.134, 0.2, -0.09],
+      [-0.11, 0.3, -0.1],
+      [-0.06, 0.338, -0.098],
+      [-0.026, 0.35, -0.095],
+    ],
+    // leak probe
+    [
+      [0.085, 0.016, -0.026],
+      [0.07, 0.02, -0.06],
+      [0.05, 0.03, -0.095],
+      [0.02, 0.2, -0.1],
+      [-0.026, 0.35, -0.095],
+    ],
+    // SMPS power cord, out through the left wall
+    [
+      [-0.136, 0.36, -0.1],
+      [-0.148, 0.3, -0.1],
+      [-0.152, 0.24, -0.098],
+      [-0.17, 0.2, -0.09],
+    ],
   ];
 
   for (const points of cablePaths) {
@@ -411,6 +659,11 @@ export function buildModel() {
   /* ---------------------------------------------------------------- fault */
 
   let faultStage = null;
+  let pumpRunning = false;
+  let leakActive = false;
+  let leakT = 0;
+  let modelClock = 0;
+  const pumpHome = new THREE.Vector3(PUMP_POS.x, PUMP_POS.y, PUMP_POS.z);
 
   function setFault(stageId, mode = "ok") {
     faultStage = stageId;
@@ -429,6 +682,8 @@ export function buildModel() {
     bypass.visible = bypassing;
     membraneInFlow.object.visible = !bypassing;
     membraneOutFlow.object.visible = !bypassing;
+    // No membrane flow, no reject stream.
+    rejectFlow.object.visible = !bypassing;
   }
 
   function setDisplay(reading) {
@@ -439,6 +694,25 @@ export function buildModel() {
     controller.setStatus(mode);
   }
 
+  function setPump(on) {
+    pumpRunning = Boolean(on);
+  }
+
+  function setTank(level) {
+    const h = Math.max(0.004, level * (TANK_H - 0.02));
+    tankWater.scale.y = h;
+    tankWater.position.y = TANK_Y0 + 0.004 + h / 2;
+    float.position.set(TANK_X + 0.013, TANK_Y0 + 0.004 + h - 0.006, 0.012);
+  }
+
+  function setDispensing(on) {
+    dispenseStream.object.visible = Boolean(on);
+  }
+
+  function setLeak(on) {
+    leakActive = Boolean(on);
+  }
+
   // The top panel is solid, so a plan view would only show a lid. The top
   // preset lifts it away to expose the rail plumbing.
   function setShellTop(visible) {
@@ -446,9 +720,32 @@ export function buildModel() {
   }
 
   function update(dt, flow) {
+    modelClock += dt;
+
     // Particle speed is proportional to flow: no flow, no motion.
     const speed = Math.max(0, flow) * 1.15;
     for (const f of flows) if (f.object.visible) f.update(dt, speed);
+    if (dispenseStream.object.visible) dispenseStream.update(dt, 1.7);
+
+    // Pump vibration while it runs, settling back when it stops.
+    if (pumpRunning) {
+      pump.position.x = pumpHome.x + Math.sin(modelClock * 88) * 0.00035;
+      pump.position.y = pumpHome.y + Math.cos(modelClock * 71) * 0.0003;
+    } else {
+      const ease = Math.min(1, dt * 8);
+      pump.position.x += (pumpHome.x - pump.position.x) * ease;
+      pump.position.y += (pumpHome.y - pump.position.y) * ease;
+    }
+
+    // The leak spreads at the base and dries when the inlet closes.
+    leakT = leakActive
+      ? Math.min(1, leakT + dt * 0.7)
+      : Math.max(0, leakT - dt * 1.6);
+    puddle.visible = leakT > 0.02;
+    if (puddle.visible) {
+      puddle.scale.set(0.25 + 0.75 * leakT, 1, 0.25 + 0.75 * leakT);
+      puddleMat.opacity = 0.55 * leakT;
+    }
   }
 
   return {
@@ -461,6 +758,10 @@ export function buildModel() {
     setFault,
     setDisplay,
     setStatus,
+    setPump,
+    setTank,
+    setDispensing,
+    setLeak,
     setShellTop,
     getFault: () => faultStage,
   };
@@ -958,6 +1259,23 @@ function createMaterials() {
       color: 0xb08a4e,
       metalness: 1,
       roughness: 0.3,
+    }),
+    chrome: new THREE.MeshStandardMaterial({
+      color: 0xd8dadd,
+      metalness: 1,
+      roughness: 0.18,
+      envMapIntensity: 1.2,
+    }),
+    tankWater: new THREE.MeshPhysicalMaterial({
+      color: 0x2f7fb8,
+      roughness: 0.1,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+      clearcoat: 1,
+      clearcoatRoughness: 0.1,
+      envMapIntensity: 1.2,
     }),
     sediment: new THREE.MeshStandardMaterial({
       color: 0xe2e9ec,

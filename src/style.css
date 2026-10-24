@@ -218,6 +218,24 @@ h1 {
   z-index: 1;
 }
 
+/* The dispense tap is an action, not a state, so it reads apart from the row. */
+.ctrl-dispense {
+  margin-left: 9px;
+  border-style: dashed;
+}
+
+.interlock-note {
+  margin-top: 12px;
+  padding: 8px 11px;
+  border-left: 2px solid var(--fault);
+  background: rgba(179, 56, 44, 0.07);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fault);
+  max-width: 42ch;
+  font-variant-numeric: tabular-nums;
+}
+
 .verdict {
   margin-top: clamp(24px, 3vw, 34px);
   padding-top: 15px;
@@ -247,6 +265,10 @@ h1 {
 
 .verdict.is-fault .verdict-state {
   color: var(--fault);
+}
+
+.verdict.is-warn .verdict-state {
+  color: var(--warn);
 }
 
 .verdict-detail {

@@ -60,6 +60,42 @@ function applyState(state) {
 
 applyState("new");
 
+/* The tank model can move states on its own — drawing down a full tank
+   reopens the float switch — so the buttons follow it. */
+sim.onChange = (type, value) => {
+  if (type !== "state") return;
+  trace.mark(STATES[value]?.label ?? "");
+  for (const button of stateButtons) {
+    button.setAttribute(
+      "aria-pressed",
+      button.dataset.state === value ? "true" : "false"
+    );
+  }
+};
+
+/* The dispense tap: the interlock's whole demo. With a water-path fault
+   latched the controller refuses the valve, in the unit's own words. */
+const dispenseButton = document.getElementById("dispense");
+const interlockNote = document.getElementById("interlock-note");
+let interlockTimer = 0;
+
+dispenseButton.addEventListener("click", () => {
+  if (sim.isLocked()) {
+    // Quote the latched state, not the last rendered verdict: the click can
+    // land in the same frame as the state change.
+    interlockNote.textContent = `Dispense locked — ${(
+      STATES[sim.state]?.label ?? "fault present"
+    ).toLowerCase()}`;
+    interlockNote.hidden = false;
+    clearTimeout(interlockTimer);
+    interlockTimer = setTimeout(() => {
+      interlockNote.hidden = true;
+    }, 3200);
+    return;
+  }
+  sim.setDispensing(!sim.read().dispensing);
+});
+
 /* ------------------------------------------------------------------ labels */
 
 /* A callout is never parked at a fixed offset from its tap: the four pressure
@@ -80,7 +116,7 @@ const labels = [
   },
   {
     anchor: "p2",
-    name: "P2 · AFTER SEDIMENT",
+    name: "P2 · SEDIMENT OUT",
     unit: "kPa",
     digits: 1,
     row: true,
@@ -90,7 +126,7 @@ const labels = [
   },
   {
     anchor: "p3",
-    name: "P3 · AFTER CARBON",
+    name: "P3 · CARBON OUT",
     unit: "kPa",
     digits: 1,
     row: true,
@@ -100,12 +136,21 @@ const labels = [
   },
   {
     anchor: "p4",
-    name: "P4 · OUTLET",
+    name: "P4 · PUMP OUT",
+    unit: "kPa",
+    digits: 1,
+    row: true,
+    read: (r) => r.pressures[3],
+    sub: (r) => `+${r.pump.dp.toFixed(1)} kPa pump`,
+  },
+  {
+    anchor: "p5",
+    name: "P5 · PRODUCT",
     unit: "kPa",
     digits: 1,
     row: true,
     stage: 2,
-    read: (r) => r.pressures[3],
+    read: (r) => r.pressures[4],
     sub: (r) => `−${r.stages[2].dp.toFixed(1)} kPa membrane`,
   },
   {
@@ -131,6 +176,14 @@ const labels = [
     digits: 0,
     side: "right",
     read: (r) => r.tdsOut,
+  },
+  {
+    anchor: "tank",
+    name: "TANK · STORED",
+    unit: "%",
+    digits: 0,
+    side: "right",
+    read: (r) => r.tankLevel * 100,
   },
 ];
 
@@ -577,7 +630,8 @@ for (const tr of document.querySelectorAll("#stage-rows tr[data-stage]")) {
   });
 }
 
-const STATUS_TEXT = { low: "Low", normal: "Normal", high: "High" };
+const STATUS_TEXT = { low: "Low", normal: "Normal", high: "High", idle: "No flow" };
+const PUMP_STATUS_TEXT = { idle: "Idle", low: "Low", normal: "Normal" };
 
 const ladderNote = document.getElementById("ladder-note");
 
@@ -587,12 +641,24 @@ function syncReadouts(reading) {
     const row = rows.get(stage.id);
     if (!row) continue;
     setText(row.dp, stage.dp.toFixed(1));
-    setText(row.ratio, `${stage.ratio.toFixed(2)}×`);
+    setText(row.ratio, stage.status === "idle" ? "—" : `${stage.ratio.toFixed(2)}×`);
     setText(row.status, STATUS_TEXT[stage.status] ?? "Normal");
-    row.tr.classList.toggle("is-fault", stage.status !== "normal");
+    row.tr.classList.toggle("is-fault", stage.status !== "normal" && stage.status !== "idle");
   }
 
-  // Four absolute pressures, each with the drop that produced it. Written from
+  // The pump's own row: boost against its flow-normalised baseline.
+  const pumpRow = rows.get("pump");
+  if (pumpRow) {
+    setText(pumpRow.dp, reading.pump.dp.toFixed(1));
+    setText(
+      pumpRow.ratio,
+      reading.pump.status === "idle" ? "—" : `${reading.pump.ratio.toFixed(2)}×`
+    );
+    setText(pumpRow.status, PUMP_STATUS_TEXT[reading.pump.status] ?? "Normal");
+    pumpRow.tr.classList.toggle("is-fault", reading.pump.status === "low");
+  }
+
+  // Five absolute pressures, each with the drop that produced it. Written from
   // the same reading object the table and the verdict use.
   for (const label of labels) {
     if (setText(label.valueNode, label.read(reading).toFixed(label.digits))) {
@@ -601,11 +667,14 @@ function syncReadouts(reading) {
     if (label.subEl && setText(label.subEl, label.sub(reading))) {
       label.size = null;
     }
-    // A tap takes the colour of the stage that ends at it.
+    // A tap takes the colour of the stage that ends at it; the pump tap is
+    // amber while its boost runs low.
     if (label.stage !== undefined) {
       const stage = reading.stages[label.stage];
       label.el.classList.toggle("is-warn", stage.status === "high");
       label.el.classList.toggle("is-fault", stage.status === "low");
+    } else if (label.anchor === "p4") {
+      label.el.classList.toggle("is-warn", reading.pump.status === "low");
     }
   }
 
@@ -618,7 +687,22 @@ function syncReadouts(reading) {
   if (model) model.setDisplay(displayLines(reading));
   if (model) {
     model.setStatus(
-      reading.verdict.level !== "fault" ? "ok" : mode === "clogged" ? "warn" : "fault"
+      reading.verdict.level === "fault"
+        ? "fault"
+        : reading.verdict.level === "warn"
+          ? "warn"
+          : "ok"
+    );
+  }
+  if (model) model.setPump(reading.visualFlow > 0.02);
+  if (model) model.setTank(reading.tankLevel);
+  if (model) model.setDispensing(reading.dispensing);
+  if (model) model.setLeak(reading.state === "leak");
+
+  if (dispenseButton) {
+    dispenseButton.setAttribute(
+      "aria-pressed",
+      reading.dispensing ? "true" : "false"
     );
   }
 }
@@ -649,8 +733,8 @@ function syncVerdict(reading) {
   lastVerdictTitle = reading.verdict.title;
   setText(verdictStateEl, reading.verdict.title);
   setText(verdictDetailEl, reading.verdict.detail);
-  const fault = reading.verdict.level === "fault";
-  verdictEl.classList.toggle("is-fault", fault);
+  verdictEl.classList.toggle("is-fault", reading.verdict.level === "fault");
+  verdictEl.classList.toggle("is-warn", reading.verdict.level === "warn");
 }
 
 /* The controller's own panel: the one line a person standing at the unit would
@@ -661,11 +745,16 @@ function displayLines(reading) {
   const stage = reading.stages.find((s) => s.id === verdict.stageId);
   let status = "ALL OK";
 
-  if (verdict.level === "fault" && stage) {
-    if (reading.state === "removed") status = `CART ${stage.index} MISSING`;
-    else if (reading.state === "bypassed") status = `CART ${stage.index} BYPASSED`;
-    else status = `CART ${stage.index} CLOGGED`;
-  }
+  const byState = {
+    clogged: () => `CART ${stage?.index ?? 1} CLOGGED`,
+    removed: () => `CART ${stage?.index ?? 2} MISSING`,
+    bypassed: () => `CART ${stage?.index ?? 3} BYPASSED`,
+    weakpump: () => "PUMP LOW BOOST",
+    dryrun: () => "NO WATER — PUMP OFF",
+    leak: () => "LEAK — INLET CLOSED",
+    tankfull: () => "TANK FULL — PUMP IDLE",
+  };
+  status = byState[reading.state]?.() ?? status;
 
   return [
     status,
